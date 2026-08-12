@@ -3,7 +3,7 @@
    actually reach devices — without it, "I pushed a change but still see the
    old version" is what happens, because the cache name never changes so the
    old cache is reused forever. One line to remember per release. */
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 
 const CACHE_NAME = `aerte-shell-${CACHE_VERSION}`;
 
