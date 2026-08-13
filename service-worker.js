@@ -3,7 +3,7 @@
    actually reach devices — without it, "I pushed a change but still see the
    old version" is what happens, because the cache name never changes so the
    old cache is reused forever. One line to remember per release. */
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 
 const CACHE_NAME = `aerte-shell-${CACHE_VERSION}`;
 
@@ -38,6 +38,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
+
+  // Never touch cross-origin traffic. The static branch below is cache-first,
+  // which for api.github.com would mean the gist sync reads a frozen copy of the
+  // blob forever and every pull looks like "no remote change".
+  let sameOrigin = false;
+  try { sameOrigin = new URL(req.url).origin === self.location.origin; } catch (e) { sameOrigin = false; }
+  if (!sameOrigin) return;
 
   const isShellDoc = req.mode === 'navigate' || req.url.endsWith('/index.html') || req.url.endsWith('/');
 

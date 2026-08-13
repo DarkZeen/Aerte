@@ -815,6 +815,39 @@ if ('serviceWorker' in navigator) {
   .bm-exn{color:var(--txt-3);font-weight:700;}
   .bm-empty{font-size:12px;color:var(--txt-3);padding:4px 0;}
   .dev-danger{margin-top:8px;}
+
+  /* ===== cross-device sync (gist) ===== */
+  /* Ambient status chip. Only mounts itself when there's something to say —
+     syncing / queued offline / error / conflict. Idle is silent by design. */
+  .sync-chip{position:fixed;left:12px;bottom:calc(22px + env(safe-area-inset-bottom,0px));z-index:300;
+    display:none;align-items:center;gap:7px;padding:8px 13px 8px 11px;border-radius:999px;
+    background:var(--toast-bg);border:1px solid var(--stroke-2);color:var(--txt-2);
+    font:600 11.5px var(--font);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+    box-shadow:var(--sh-toast);cursor:pointer;max-width:min(74vw,320px);}
+  .sync-chip.show{display:flex;}
+  body.dev-on .sync-chip{bottom:calc(160px + env(safe-area-inset-bottom,0px));}
+  .sc-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--txt-3);}
+  .sc-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .s-syncing  .sc-dot{background:var(--blue);animation:sc-pulse 1.05s infinite ease-in-out;}
+  .s-idle     .sc-dot{background:var(--green);}
+  .s-queued   .sc-dot{background:var(--orange);}
+  .s-waiting  .sc-dot{background:var(--blue);}
+  .s-conflict .sc-dot{background:var(--orange);}
+  .s-error    .sc-dot{background:var(--red);}
+  @keyframes sc-pulse{0%,100%{opacity:1;}50%{opacity:.22;}}
+
+  .sync-stat{margin-top:14px;display:flex;align-items:center;gap:9px;background:var(--card);
+    border:1px solid var(--stroke);border-radius:12px;padding:11px 13px;font:700 12.5px var(--font);color:var(--txt);}
+  .sync-stat .sc-dot{width:9px;height:9px;}
+  .sync-stat .ss-sub{margin-left:auto;font:600 11px var(--font);color:var(--txt-3);}
+  .sync-note{margin-top:10px;font-size:11.5px;line-height:1.5;border-radius:10px;padding:9px 11px;word-break:break-word;}
+  .sync-note.warn{color:var(--orange);background:rgba(255,159,10,0.09);border:1px solid rgba(255,159,10,0.28);}
+  .sync-note.bad{color:var(--red);background:var(--red-soft);border:1px solid rgba(255,69,58,0.3);}
+  .sync-cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;}
+  .sync-side{background:var(--card);border:1px solid var(--stroke);border-radius:12px;padding:11px;}
+  .sync-side b{display:block;font-size:12.5px;color:var(--txt);}
+  .sync-side span{display:block;font-size:11px;color:var(--txt-3);margin-top:3px;line-height:1.45;}
+  .sync-side.win{border-color:var(--red);}
 </style>
 
 </head><body><div id="app">
@@ -994,12 +1027,18 @@ let weekOffset=0;
    is why nothing persisted before.) */
 function gget(k){try{const v=localStorage.getItem(k);return v==null?null:{value:v};}catch{return null;}}
 function gset(k,v){
-  try{ localStorage.setItem(k,v); return true; }
+  try{ localStorage.setItem(k,v); syncTouch(k); return true; }
   catch(e){
     console.warn('save failed',k,e);
     try{ toast('⚠️ Storage is full — this change didn\'t save. Export a backup, then free up space.'); }catch(_){}
     return false;
   }
+}
+/* Deleting is part of the same funnel — gist sync needs to see an unset the same
+   way it sees a write, otherwise a key cleared here silently comes back on pull. */
+function gdel(k){
+  try{ localStorage.removeItem(k); syncTouch(k); return true; }
+  catch(e){ console.warn('delete failed',k,e); return false; }
 }
 
 /* Run a render WITHOUT the motion layer's entrance animations.
@@ -1712,7 +1751,10 @@ function runMigrations(){
    and Wipe all derive from this array — add new keys here the moment you add
    a gset() call for them, or they will silently miss backups.
    NEVER rename the aerte5_ or meal_ prefixes on existing keys: that silently
-   orphans a user's existing data instead of migrating it. */
+   orphans a user's existing data instead of migrating it.
+   Deliberately NOT in this list: aerte_sync_cfg and aerte_sync_state. Those are
+   per-device (one holds a GitHub token) and must never be exported or pushed to
+   the gist — see SYNC_CFG_KEY below. */
 const ALL_STORE_KEYS=[
   'aerte5_badges','aerte5_bmap','aerte5_cycle','aerte5_cycle_start','aerte5_dev_layout',
   'aerte5_fx','aerte5_lib','aerte5_mmap','aerte5_mpick','aerte5_msvg','aerte5_pick',
@@ -2411,6 +2453,9 @@ function closeSheet(){
   const ret=SHEET_RETURN; SHEET_RETURN=null;
   scrim.classList.remove('show');sheet.classList.remove('show');
   if(ret) ret();
+  /* A pull that arrived while this sheet was open was held back rather than
+     reloading the page mid-edit. The sheet is gone now — let it land. */
+  else if(typeof SYNC_PENDING!=='undefined'&&SYNC_PENDING){ SYNC_PENDING=null; setTimeout(()=>syncNow('deferred'),350); }
 }
 scrim.onclick=closeSheet;
 
@@ -3271,8 +3316,10 @@ function renderProfileSettings(){
     </div></div>
     <div class="totalsbar" id="profPreview"></div>
     <button class="cta red" id="saveProfile">Save profile</button>
+    <button class="cta ghost" id="openSync">☁︎ Cross-device sync${syncOn()?' · on':''}</button>
     <button class="cta ghost" id="openDev">⚙︎ Enter developer mode</button>`;
   document.getElementById('openDev').onclick=()=>{closeSheet();setDevMode(true);};
+  document.getElementById('openSync').onclick=openSyncSettings;
   function updatePreview(){
     const w=+document.getElementById('pWeight').value||PROFILE.weight,h=+document.getElementById('pHeight').value||PROFILE.height,a=+document.getElementById('pAge').value||PROFILE.age,sx=document.getElementById('pSex').value,goal=document.getElementById('pGoal').value;
     const b=sx==='male'?(10*w+6.25*h-5*a+5):(10*w+6.25*h-5*a-161);
@@ -4764,6 +4811,9 @@ function ensureDevBar(){
       <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
     <span class="dev-sep"></span>
+    <button class="dev-ic" data-tool="sync" title="Sync — cross-device gist">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M7 18h10a4 4 0 0 0 .4-7.98A6 6 0 0 0 6.1 9.2A3.9 3.9 0 0 0 7 18Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+    </button>
     <button class="dev-ic" data-tool="tools" title="Data tools">
       <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg>
     </button>
@@ -4776,6 +4826,7 @@ function ensureDevBar(){
     if(t==='close'){ setDevMode(false); return; }
     if(t==='resize') return;               // dimmed placeholder — inert
     if(t==='bookends'){ openDevBookends(); return; }
+    if(t==='sync'){ openSyncSettings(); return; }
     if(t==='tools'){ openDevTools(); return; }
     if(t==='sim'){ openDevSim(); return; }
     if(t==='ui'){ openDevUI(); return; }
@@ -5898,6 +5949,7 @@ function openDevTools(){
   openSheet(`<h3>Data tools</h3>
     <button class="cta ghost" id="devExport">⬇︎ Export all data (JSON)</button>
     <button class="cta ghost" id="devImport">⬆︎ Import data from file</button>
+    <button class="cta ghost" id="devSync">☁︎ Cross-device sync${syncOn()?' · on':' · off'}</button>
     <input type="file" id="devFile" accept="application/json" style="display:none">
     <div class="dev-danger">
       <div class="sec-lab" style="margin-top:18px;color:var(--red)">Danger zone</div>
@@ -5908,6 +5960,7 @@ function openDevTools(){
     <p style="font-size:11px;color:var(--txt-3);margin-top:12px;line-height:1.5">Export writes a single JSON file with every store (schema v${getSchema()}, ${ALL_STORE_KEYS.length} keys). Import replaces current data. Reset clears day-by-day logs but keeps your libraries.</p>`);
   document.getElementById('devExport').onclick=devExport;
   document.getElementById('devImport').onclick=()=>document.getElementById('devFile').click();
+  document.getElementById('devSync').onclick=openSyncSettings;
   document.getElementById('devFile').onchange=devImport;
   document.getElementById('devResetStreak').onclick=devResetStreak;
   document.getElementById('devReseed').onclick=devReseed;
@@ -5981,9 +6034,572 @@ function devReseed(){
 function devWipe(){
   if(!confirm('Erase EVERYTHING including libraries? This cannot be undone.')) return;
   if(!confirm('Really wipe all data?')) return;
-  ALL_STORE_KEYS.forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
+  /* Also drop the sync credentials. Otherwise the next boot pulls the gist and
+     the "wiped" data walks straight back in, which reads as the wipe failing. */
+  const hadSync=syncOn();
+  SYNC_APPLYING=true;   // a wipe is not an edit to push
+  try{
+    ALL_STORE_KEYS.forEach(k=>gdel(k));
+    gdel(SYNC_CFG_KEY); gdel(SYNC_STATE_KEY);
+  } finally { SYNC_APPLYING=false; }
+  if(hadSync) toast('Wiped — sync disconnected too');
   setTimeout(()=>location.reload(),400);
 }
+
+/* ============ CROSS-DEVICE SYNC — secret GitHub Gist as the blob ============
+
+   Shape of the thing:
+
+     boot / tab focus / online  ->  GET  gist  ->  apply if remote is new to us
+     any gset() of a synced key ->  PATCH gist ->  debounced ~3s
+
+   Both directions funnel through syncNow(), which always does the GET first.
+   That preflight is what makes "warn before overwriting newer remote data"
+   possible: a PATCH only goes out once we've confirmed the remote blob is one
+   we've already reconciled with. If it isn't, and this device also has unpushed
+   edits, we stop and ask instead of clobbering either side.
+
+   Divergence is decided with counters, never by comparing two devices' clocks:
+     localAt  > pushedAt        -> this device has edits the gist doesn't have
+     remote's updatedAt > remoteAt -> the gist has a blob we've never applied
+   Both true at once is the conflict case. Wall-clock times are only ever shown
+   to the user, never used to pick a winner.
+
+   The credentials live in aerte_sync_cfg, which is NOT in ALL_STORE_KEYS — it is
+   never exported and never pushed. Nothing here is committed to the repo. */
+
+const SYNC_CFG_KEY='aerte_sync_cfg';       // {gistId, token, art, auto, device}
+const SYNC_STATE_KEY='aerte_sync_state';   // {localAt, pushedAt, remoteAt, etag, lastSyncAt, queued}
+const SYNC_FILE='aerte-data.json';
+const SYNC_API='https://api.github.com/gists';
+const SYNC_DEBOUNCE=3000;
+const SYNC_FOCUS_GAP=20000;                // don't re-pull on every tab flick
+/* Artwork can run to hundreds of KB. Opt-in, default off. */
+const SYNC_ART_KEYS=['aerte5_msvg','aerte5_bmap','aerte5_mmap'];
+
+/* var, not let, on purpose: gset() calls syncTouch(), and gset is reachable from
+   anywhere in this script — including code that runs before this point during
+   evaluation. `var` hoists to undefined, which syncTouch can test for; a `let`
+   would throw a TDZ ReferenceError that even typeof can't guard against. */
+var SYNC_CFG={gistId:'',token:'',art:false,auto:true,device:''};
+var SYNC_ST={localAt:0,pushedAt:0,remoteAt:0,remoteSig:'',etag:'',lastSyncAt:0,queued:false};
+var SYNC_STATUS='off';      // off | idle | syncing | queued | error | conflict
+var SYNC_MSG='';
+var SYNC_APPLYING=false;    // writing remote data locally — must not re-arm a push
+var SYNC_QUIET=true;        // true until boot finishes; boot-time migration writes aren't user edits
+var SYNC_BUSY=false;
+var SYNC_PENDING=null;      // a remote blob we've read but can't apply yet (sheet open)
+var _syncT=null, _syncLastFocus=0, _syncRetryT=null;
+
+function syncOn(){ return !!(SYNC_CFG.gistId&&SYNC_CFG.token); }
+
+/* localAt and pushedAt are BOTH stamped from this device's clock and compared only
+   against each other. Never assign either from a remote payload's updatedAt: the
+   other device's clock can be minutes ahead, and a pushedAt in the future makes
+   localAt>pushedAt unreachable — this device would go permanently "not dirty" and
+   silently stop pushing its own edits. */
+function syncDirty(){ return SYNC_ST.localAt>SYNC_ST.pushedAt; }
+function syncClearDirty(){ SYNC_ST.localAt=Date.now(); SYNC_ST.pushedAt=SYNC_ST.localAt; }
+function saveSyncCfg(){ gset(SYNC_CFG_KEY,JSON.stringify(SYNC_CFG)); }
+function saveSyncState(){ gset(SYNC_STATE_KEY,JSON.stringify(SYNC_ST)); }
+
+function loadSync(){
+  let r=gget(SYNC_CFG_KEY);
+  if(r){ try{ SYNC_CFG={...SYNC_CFG,...JSON.parse(r.value)}; }catch(e){} }
+  r=gget(SYNC_STATE_KEY);
+  if(r){ try{ SYNC_ST={...SYNC_ST,...JSON.parse(r.value)}; }catch(e){} }
+  SYNC_STATUS=syncOn()?(SYNC_ST.queued?'queued':'idle'):'off';
+}
+
+/* Called from gset/gdel on every single write. Keep it cheap and non-throwing.
+   Only keys in ALL_STORE_KEYS count as data — the sync bookkeeping keys write
+   through the same funnel, so without this filter it would recurse forever. */
+function syncTouch(k){
+  try{
+    if(typeof SYNC_ST==='undefined'||!SYNC_ST) return;   // a write during script evaluation
+    if(SYNC_APPLYING||SYNC_QUIET) return;
+    if(typeof ALL_STORE_KEYS==='undefined'||!ALL_STORE_KEYS.includes(k)) return;
+    /* Strictly greater than pushedAt, not merely "now". Two things depend on it:
+       an edit landing in the same millisecond as the last push must still count as
+       an edit (Date.now() has ms granularity, and an apply-then-edit does happen
+       inside one tick), and a pushedAt that somehow sits in the future must not be
+       able to wedge this device into a permanent "nothing to push" state. */
+    SYNC_ST.localAt=Math.max(Date.now(),SYNC_ST.pushedAt+1);
+    saveSyncState();
+    if(SYNC_STATUS==='idle'||SYNC_STATUS==='off') renderSyncChip();
+    if(!syncOn()||!SYNC_CFG.auto) return;
+    clearTimeout(_syncT);
+    _syncT=setTimeout(()=>syncNow('local'),SYNC_DEBOUNCE);
+  }catch(e){ console.warn('syncTouch',e); }
+}
+
+function syncSet(status,msg){
+  SYNC_STATUS=status; SYNC_MSG=msg||'';
+  renderSyncChip();
+  if(document.getElementById('syncBody')) renderSyncBody();
+}
+
+function syncDevice(){
+  if(!SYNC_CFG.device){
+    const ua=navigator.userAgent;
+    const guess=/iPhone/.test(ua)?'iPhone':/iPad/.test(ua)?'iPad':/Android/.test(ua)?'Android'
+               :/Macintosh/.test(ua)?'Mac':/Windows/.test(ua)?'PC':'device';
+    SYNC_CFG.device=guess+'-'+Math.random().toString(36).slice(2,6);
+    saveSyncCfg();
+  }
+  return SYNC_CFG.device;
+}
+
+/* The blob. `omitted` names keys this device chose not to sync (artwork with the
+   toggle off) so the receiver leaves its own copies alone instead of treating the
+   absence as a deletion. */
+function syncPayload(stamp){
+  const data={},omitted=[];
+  ALL_STORE_KEYS.forEach(k=>{
+    if(!SYNC_CFG.art&&SYNC_ART_KEYS.includes(k)){ omitted.push(k); return; }
+    const r=gget(k); if(r) data[k]=r.value;
+  });
+  return {app:'aerte',v:5,
+    schema:getSchema(),                     // the level this data has been migrated to
+    schemaMax:SCHEMA_VERSION,               // what the writing app could handle, for diagnostics
+    updatedAt:new Date(stamp).toISOString(),
+    device:syncDevice(),omitted,data};
+}
+
+function syncHeaders(extra){
+  return Object.assign({
+    'Accept':'application/vnd.github+json',
+    'Authorization':'Bearer '+SYNC_CFG.token,
+    'X-GitHub-Api-Version':'2022-11-28',
+  },extra||{});
+}
+
+function syncHttpError(status){
+  if(status===401) return 'GitHub rejected the token (401) — it may be expired or mistyped';
+  if(status===403) return 'GitHub refused (403) — the token needs read+write on Gists';
+  if(status===404) return 'Gist not found (404) — check the Gist ID, and that the token can see it';
+  if(status===422) return 'GitHub rejected the payload (422) — likely too large; try turning artwork sync off';
+  if(status===429) return 'Rate-limited by GitHub (429) — try again in a minute';
+  return 'GitHub returned '+status;
+}
+
+async function syncGetRemote(useEtag){
+  const h=syncHeaders();
+  if(useEtag&&SYNC_ST.etag) h['If-None-Match']=SYNC_ST.etag;
+  const res=await fetch(SYNC_API+'/'+encodeURIComponent(SYNC_CFG.gistId),{method:'GET',headers:h,cache:'no-store'});
+  if(res.status===304) return {unchanged:true};
+  if(!res.ok) throw new Error(syncHttpError(res.status));
+  const etag=res.headers.get('ETag')||'';
+  const gist=await res.json();
+  const f=(gist.files||{})[SYNC_FILE];
+  if(!f) return {empty:true,etag};
+  let text=f.content||'';
+  /* GitHub truncates file content over 1 MB in the API response — artwork blobs
+     get there easily. raw_url has the whole thing. */
+  if(f.truncated&&f.raw_url){
+    const r2=await fetch(f.raw_url,{cache:'no-store'});
+    if(!r2.ok) throw new Error('Could not read the full gist payload ('+r2.status+')');
+    text=await r2.text();
+  }
+  let payload;
+  try{ payload=JSON.parse(text); }
+  catch(e){ throw new Error('Remote payload is not valid JSON — the gist may have been edited by hand'); }
+  if(!payload||typeof payload!=='object'||!payload.data||typeof payload.data!=='object')
+    throw new Error('Remote payload has no data block');
+  return {payload,etag,sig:syncSig(payload.updatedAt,text)};
+}
+
+/* Identity of a blob, independent of clocks. This is the backstop that stops a
+   payload with a missing or duplicate updatedAt from being applied over and over
+   (each apply reloads the page — a loop there is unrecoverable on a phone). */
+function syncSig(updatedAt,text){ return (updatedAt||'-')+'|'+String(text||'').length; }
+
+/* Write a remote blob into local storage. Whole-blob semantics: a synced key
+   absent from the payload was unset on the sender, so it gets unset here too —
+   except for keys the sender listed as omitted. */
+function syncApply(payload){
+  const omitted=Array.isArray(payload.omitted)?payload.omitted:[];
+  const failed=[];
+  let n=0;
+  SYNC_APPLYING=true;
+  try{
+    ALL_STORE_KEYS.forEach(k=>{
+      if(omitted.includes(k)) return;
+      if(Object.prototype.hasOwnProperty.call(payload.data,k)){ if(gset(k,payload.data[k])) n++; else failed.push(k); }
+      else gdel(k);
+    });
+    runMigrations();          // remote may be a lower schema; ladder it up in place
+  } finally { SYNC_APPLYING=false; }
+  /* A write that failed (quota) means local is now a mix of both sides. Throw so
+     the caller surfaces it and does NOT mark this blob reconciled — otherwise the
+     next pull would 304 and the half-applied state would look settled forever. */
+  if(failed.length) throw new Error('Only '+n+' of '+(n+failed.length)+
+    ' keys could be written — storage is probably full. Free up space and sync again; the gist still has the full copy.');
+  return n;
+}
+
+function syncRemoteSchema(p){ const n=parseInt(p&&p.schema,10); return isNaN(n)?0:n; }
+
+/* ---------- the one entry point ---------- */
+async function syncNow(reason){
+  if(!syncOn()){ syncSet('off',''); return; }
+  if(SYNC_BUSY) return;
+  /* An unresolved conflict is an open question to the user. Background runs must
+     not push (they'd pre-empt a "use the gist copy" answer), must not re-raise the
+     prompt on every tab focus, and must not overwrite the status that says so.
+     Only an explicit action — the conflict buttons, or Sync now — clears it. */
+  if(SYNC_STATUS==='conflict'&&reason!=='manual') return;
+  if(navigator.onLine===false){
+    if(syncDirty()){ SYNC_ST.queued=true; saveSyncState(); }
+    syncSet('queued','Offline — this device\'s changes will go up when you\'re back online');
+    return;
+  }
+  SYNC_BUSY=true;
+  try{ await syncRun(reason); }
+  catch(e){
+    /* Never swallow. A dead network on a background pull still shows in the chip
+       and the panel; it just doesn't interrupt with a toast. */
+    const msg=(e&&e.message)?e.message:String(e);
+    const offline=/Failed to fetch|NetworkError|Load failed/i.test(msg);
+    if(offline&&syncDirty()){ SYNC_ST.queued=true; saveSyncState(); }
+    syncSet(offline?'queued':'error',offline?'No connection — changes are queued':msg);
+    if(reason==='manual') toast('Sync failed: '+msg);
+    console.warn('sync failed',reason,e);
+  }
+  finally{ SYNC_BUSY=false; }
+}
+
+/* True while a bottom sheet is open. Applying a pull reloads the page and the
+   conflict prompt replaces the sheet's contents — either one mid-edit throws away
+   what the user was typing. Defer both until the sheet is closed. */
+function syncSheetOpen(){
+  const s=document.getElementById('sheet');
+  return !!(s&&s.classList.contains('show'));
+}
+function syncRetryLater(ms){
+  clearTimeout(_syncRetryT);
+  _syncRetryT=setTimeout(()=>syncNow('deferred'),ms||5000);
+}
+
+async function syncRun(reason){
+  syncSet('syncing','Checking the gist…');
+  const r=await syncGetRemote(reason!=='manual');   // manual = force a fresh read
+  const dirty=syncDirty();
+
+  if(r.unchanged){                                  // 304 — remote is what we last saw
+    if(dirty) return syncPushNow();
+    return syncDone('');
+  }
+
+  if(r.empty){                                      // fresh gist, or the file isn't there yet
+    if(dirty||!SYNC_ST.pushedAt) return syncPushNow();
+    SYNC_ST.etag=r.etag||'';
+    return syncDone('Gist has no '+SYNC_FILE+' yet');
+  }
+
+  const p=r.payload;
+  const rs=syncRemoteSchema(p);
+  if(rs>SCHEMA_VERSION){
+    /* Deliberately do not store the etag here: once this device is updated we
+       want the same blob read again rather than 304'd away. */
+    syncSet('error','The gist holds data from a newer Aerte (schema v'+rs+', this device runs v'+SCHEMA_VERSION+
+      '). Refusing to import it — update this device first. Nothing was changed.');
+    toast('Sync paused — remote data is newer than this app');
+    return;
+  }
+
+  const rAt=Date.parse(p.updatedAt||'')||0;
+  /* "Have I already reconciled with this exact blob?" — decided by signature, not
+     by timestamp. Comparing rAt against a stored remoteAt would mix two devices'
+     clocks: if the other device's clock lags, a genuinely new blob reads as older
+     than one we've seen and the update gets skipped for good. */
+  const seen=!!(r.sig&&r.sig===SYNC_ST.remoteSig);
+  if(seen){
+    SYNC_ST.etag=r.etag||'';
+    if(dirty) return syncPushNow();
+    return syncDone('');
+  }
+
+  /* From here we'd either overwrite local data or interrupt with a prompt.
+     The etag stays unwritten until one of those actually happens, so a deferral
+     can never turn into a silently skipped update. */
+  if(syncSheetOpen()&&reason!=='manual'){
+    SYNC_PENDING=true;                              // closeSheet() re-runs; this is just the fallback
+    /* Its own status, not 'idle' — the chip must not read as "all settled" while a
+       remote update is sitting unapplied. */
+    syncSet('waiting','A remote update is waiting — it lands when you close this panel');
+    syncRetryLater(30000);
+    return;
+  }
+
+  if(dirty){                                        // both sides moved — don't pick for them
+    SYNC_PENDING=null;
+    syncSet('conflict','Both this device and the gist changed since the last sync.');
+    syncConflict(p,rAt,r);
+    return;
+  }
+
+  SYNC_PENDING=null;
+  const n=syncApply(p);
+  syncMarkReconciled(rAt,r);
+  syncClearDirty();                                 // local now *is* remote — nothing to push
+  saveSyncState();
+  syncSet('idle','');
+  toast('Pulled '+n+' keys from '+(p.device||'another device')+' — reloading');
+  /* Reload rather than rehydrate: ~30 module-level globals hold the parsed data,
+     and a partial refresh is how you get a UI that disagrees with storage. */
+  setTimeout(()=>location.reload(),700);
+}
+
+function syncMarkReconciled(rAt,r){
+  SYNC_ST.remoteAt=rAt||Date.now();   // display only — never used to order two devices
+  SYNC_ST.remoteSig=(r&&r.sig)||'';
+  SYNC_ST.etag=(r&&r.etag)||'';
+  SYNC_ST.lastSyncAt=Date.now();
+  SYNC_ST.queued=false;
+}
+
+function syncDone(note){
+  SYNC_ST.lastSyncAt=Date.now(); SYNC_ST.queued=false;
+  saveSyncState();
+  syncSet('idle',note||'');
+}
+
+async function syncPushNow(){
+  /* Snapshot the edit counter before building. Edits that land during the
+     request stay dirty and get their own push instead of being marked sent. */
+  const stamp=SYNC_ST.localAt||Date.now();
+  SYNC_ST.localAt=stamp;
+  const payload=syncPayload(stamp);
+  const content=JSON.stringify(payload);
+  const body=JSON.stringify({files:{[SYNC_FILE]:{content}}});
+  syncSet('syncing','Uploading '+Math.round(body.length/1024)+' KB…');
+  const res=await fetch(SYNC_API+'/'+encodeURIComponent(SYNC_CFG.gistId),
+    {method:'PATCH',headers:syncHeaders({'Content-Type':'application/json'}),body});
+  if(!res.ok) throw new Error(syncHttpError(res.status));
+  /* Record what we just wrote as the blob we've reconciled with, so the next
+     preflight recognises our own push instead of reading it back as a conflict. */
+  SYNC_ST.pushedAt=stamp;
+  syncMarkReconciled(Date.parse(payload.updatedAt)||stamp,
+    {sig:syncSig(payload.updatedAt,content),etag:res.headers.get('ETag')||''});
+  saveSyncState();
+  syncSet('idle','');
+}
+
+/* ---------- conflict ---------- */
+function syncConflict(p,rAt,r){
+  const fmt=t=>t?new Date(t).toLocaleString():'unknown';
+  const rKeys=Object.keys(p.data||{}).length;
+  openSheet(`<h3>Sync conflict</h3>
+    <div class="meta">This device and the gist both changed since the last successful sync. <b>Nothing has been overwritten.</b> Pick which side wins — the other side's changes since the split are lost.</div>
+    <div class="sync-cmp">
+      <div class="sync-side"><b>This device</b><span>edited ${esc(fmt(SYNC_ST.localAt))}</span><span>${ALL_STORE_KEYS.length} keys local</span></div>
+      <div class="sync-side"><b>${esc(p.device||'The gist')}</b><span>edited ${esc(fmt(rAt))}</span><span>${rKeys} keys in the blob</span></div>
+    </div>
+    <div class="sync-note warn">Timestamps come from each device's own clock, so treat them as a hint, not proof of order.</div>
+    <button class="cta red" id="scRemote">Use the gist copy — discard this device's changes</button>
+    <button class="cta ghost" id="scLocal">Keep this device — overwrite the gist</button>
+    <button class="cta ghost" id="scLater">Decide later — leave both alone</button>
+    <button class="cta ghost" id="scBackup">⬇︎ Export a backup of this device first</button>`);
+  document.getElementById('scBackup').onclick=devExport;
+  document.getElementById('scLater').onclick=()=>{ closeSheet(); toast('Sync paused until you choose'); };
+  document.getElementById('scRemote').onclick=()=>{
+    if(!confirm('Replace this device\'s data with the gist copy? Local changes since the last sync are lost.')) return;
+    let n;
+    try{ n=syncApply(p); }
+    catch(e){ syncSet('error',(e&&e.message)||String(e)); toast('Could not apply the gist copy'); return; }
+    syncMarkReconciled(rAt,r);
+    syncClearDirty();
+    saveSyncState();
+    closeSheet(); toast('Took the gist copy ('+n+' keys) — reloading');
+    setTimeout(()=>location.reload(),700);
+  };
+  document.getElementById('scLocal').onclick=async()=>{
+    if(!confirm('Overwrite the gist with this device? Changes made on the other device are lost.')) return;
+    /* Mark the losing blob as reconciled so the next preflight doesn't re-raise
+       the same conflict, then push. Local stays dirty, so the push still happens. */
+    syncMarkReconciled(rAt,r);
+    saveSyncState();
+    closeSheet();
+    SYNC_STATUS='idle';
+    await syncNow('manual');
+    if(SYNC_STATUS==='idle') toast('Gist overwritten with this device');
+  };
+}
+
+/* ---------- status chip ---------- */
+function syncChipText(){
+  if(SYNC_STATUS==='syncing')  return SYNC_MSG||'Syncing…';
+  if(SYNC_STATUS==='queued')   return 'Sync queued — offline';
+  if(SYNC_STATUS==='waiting')  return 'Remote update waiting';
+  if(SYNC_STATUS==='conflict') return 'Sync conflict — tap to resolve';
+  if(SYNC_STATUS==='error')    return 'Sync error — tap for details';
+  if(SYNC_STATUS==='idle'&&syncDirty()) return 'Unsynced changes';
+  return '';
+}
+function renderSyncChip(){
+  let el=document.getElementById('syncChip');
+  const txt=syncChipText();
+  if(!txt){ if(el) el.classList.remove('show'); return; }
+  if(!el){
+    el=document.createElement('div');
+    el.id='syncChip'; el.className='sync-chip';
+    el.innerHTML='<span class="sc-dot"></span><span class="sc-txt"></span>';
+    el.onclick=openSyncSettings;
+    document.body.appendChild(el);
+  }
+  el.className='sync-chip show s-'+SYNC_STATUS;
+  el.querySelector('.sc-txt').textContent=txt;
+}
+
+/* ---------- settings ---------- */
+function syncRelTime(t){
+  if(!t) return 'never';
+  const s=Math.round((Date.now()-t)/1000);
+  if(s<60) return 'just now';
+  if(s<3600) return Math.floor(s/60)+'m ago';
+  if(s<86400) return Math.floor(s/3600)+'h ago';
+  return new Date(t).toLocaleDateString();
+}
+
+function openSyncSettings(){
+  openSheet(`<h3>Cross-device sync</h3>
+    <div class="meta">Keeps this device and your phone on the same data through one <b>secret</b> GitHub gist. Nothing else sees it, and the token stays on this device — it is never put in the gist or in a backup file.</div>
+    <div id="syncBody"></div>`);
+  renderSyncBody();
+}
+
+function renderSyncBody(){
+  const host=document.getElementById('syncBody'); if(!host) return;
+  const dotClass='s-'+SYNC_STATUS;
+  const label={off:'Not connected',idle:'Idle',syncing:'Syncing…',queued:'Queued (offline)',
+               waiting:'Update waiting',error:'Error',conflict:'Conflict'}[SYNC_STATUS]||SYNC_STATUS;
+  const artOn=!!SYNC_CFG.art, autoOn=SYNC_CFG.auto!==false;
+  host.innerHTML=`
+    <div class="sync-stat ${dotClass}">
+      <span class="sc-dot"></span><span>${esc(label)}</span>
+      <span class="ss-sub">last synced ${esc(syncRelTime(SYNC_ST.lastSyncAt))}</span>
+    </div>
+    ${SYNC_MSG?`<div class="sync-note ${SYNC_STATUS==='error'?'bad':'warn'}">${esc(SYNC_MSG)}</div>`:''}
+    ${syncOn()&&syncDirty()?`<div class="sync-note warn">This device has changes that aren't in the gist yet.</div>`:''}
+
+    <div class="field"><label>Gist ID</label>
+      <input id="syGist" type="text" inputmode="latin" autocomplete="off" spellcheck="false"
+        placeholder="32-character id from the gist URL" value="${esc(SYNC_CFG.gistId)}"></div>
+    <div class="field"><label>Fine-grained token · Gists read+write</label>
+      <input id="syTok" type="password" autocomplete="off" spellcheck="false"
+        placeholder="${SYNC_CFG.token?'•••••••• saved on this device':'github_pat_…'}"></div>
+
+    <div class="fx-row" style="margin-top:16px">
+      <div class="fx-txt"><div class="nm">Sync automatically</div><div class="ds">Pull on open and on tab focus, push ${SYNC_DEBOUNCE/1000}s after a change. Off means only the button below syncs.</div></div>
+      <button class="fx-sw ${autoOn?'on':''}" id="syAuto" role="switch" aria-checked="${autoOn}"><i></i></button>
+    </div>
+    <div class="fx-row">
+      <div class="fx-txt"><div class="nm">Include artwork</div><div class="ds">Muscle icons, body map and Map Studio bindings. Can be hundreds of KB — leave off unless you actually edit them on both devices.</div></div>
+      <button class="fx-sw ${artOn?'on':''}" id="syArt" role="switch" aria-checked="${artOn}"><i></i></button>
+    </div>
+
+    <button class="cta red" id="sySave">Save connection</button>
+    <button class="cta ghost" id="sySync"${syncOn()?'':' disabled style="opacity:.45"'}>⟳ Sync now</button>
+    <button class="cta ghost" id="syCreate">＋ Create a new secret gist for me</button>
+    ${syncOn()?`<button class="cta ghost" id="syForget" style="color:var(--red)">⨯ Disconnect this device</button>`:''}
+
+    <p class="mm-note">Setup: <b>github.com/settings/personal-access-tokens</b> → new fine-grained token → Account permissions → <b>Gists: Read and write</b>. Nothing else. Then either paste an existing secret gist's ID, or hit "Create a new secret gist" once and use the same ID on your other device.</p>
+    <p class="mm-note">Syncs ${ALL_STORE_KEYS.length} keys${artOn?'':' (artwork excluded)'} as one blob, last-write-wins. If both devices changed since the last sync you get asked instead of losing one side.</p>`;
+
+  document.getElementById('syAuto').onclick=()=>{ SYNC_CFG.auto=!(SYNC_CFG.auto!==false); saveSyncCfg(); renderSyncBody(); };
+  document.getElementById('syArt').onclick=()=>{
+    SYNC_CFG.art=!SYNC_CFG.art; saveSyncCfg(); renderSyncBody();
+    if(SYNC_CFG.art) toast('Artwork will be included on the next push');
+  };
+  document.getElementById('sySave').onclick=()=>{
+    const id=document.getElementById('syGist').value.trim();
+    const tk=document.getElementById('syTok').value.trim();
+    const idChanged=id!==SYNC_CFG.gistId;
+    SYNC_CFG.gistId=id;
+    if(tk) SYNC_CFG.token=tk;              // blank means "keep the saved one"
+    saveSyncCfg();
+    if(idChanged){                          // different blob — nothing about it is "seen" yet
+      SYNC_ST.remoteAt=0; SYNC_ST.remoteSig=''; SYNC_ST.etag=''; saveSyncState();
+    }
+    if(!syncOn()){ syncSet('off','Gist ID and token are both required'); toast('Need both a Gist ID and a token'); return; }
+    toast('Saved — syncing');
+    syncSet('idle','');
+    syncNow('manual');
+  };
+  document.getElementById('sySync').onclick=()=>{ if(syncOn()) syncNow('manual'); };
+  document.getElementById('syCreate').onclick=syncCreateGist;
+  const f=document.getElementById('syForget');
+  if(f) f.onclick=()=>{
+    if(!confirm('Disconnect sync on this device? The gist and its data are left untouched; your local data stays as it is.')) return;
+    SYNC_CFG={gistId:'',token:'',art:SYNC_CFG.art,auto:SYNC_CFG.auto,device:SYNC_CFG.device};
+    SYNC_ST={localAt:SYNC_ST.localAt,pushedAt:0,remoteAt:0,remoteSig:'',etag:'',lastSyncAt:0,queued:false};
+    SYNC_PENDING=null;
+    saveSyncCfg(); saveSyncState();
+    syncSet('off','');
+    toast('Sync disconnected');
+    renderSyncBody();
+  };
+}
+
+/* One-tap setup: POST a secret gist seeded with this device's data, then keep
+   its id. Explicitly user-triggered — it creates something on their account. */
+async function syncCreateGist(){
+  const tk=(document.getElementById('syTok')||{}).value?.trim()||SYNC_CFG.token;
+  if(!tk){ toast('Paste a token first'); return; }
+  if(!confirm('Create a new SECRET gist on your GitHub account and seed it with this device\'s data?')) return;
+  SYNC_CFG.token=tk; saveSyncCfg();
+  syncSet('syncing','Creating the gist…');
+  try{
+    const stamp=SYNC_ST.localAt||Date.now();
+    const payload=syncPayload(stamp);
+    const content=JSON.stringify(payload);
+    const body=JSON.stringify({description:'Aerte sync blob — do not edit by hand',public:false,
+      files:{[SYNC_FILE]:{content}}});
+    const res=await fetch(SYNC_API,{method:'POST',headers:syncHeaders({'Content-Type':'application/json'}),body});
+    if(!res.ok) throw new Error(syncHttpError(res.status));
+    const g=await res.json();
+    if(!g.id) throw new Error('GitHub did not return a gist id');
+    SYNC_CFG.gistId=g.id; saveSyncCfg();
+    SYNC_ST.localAt=stamp; SYNC_ST.pushedAt=stamp;
+    syncMarkReconciled(Date.parse(payload.updatedAt)||stamp,
+      {sig:syncSig(payload.updatedAt,content),etag:res.headers.get('ETag')||''});
+    saveSyncState();
+    syncSet('idle','');
+    toast('Secret gist created — put this ID on your other device');
+    renderSyncBody();
+  }catch(e){
+    const msg=(e&&e.message)?e.message:String(e);
+    syncSet('error',msg);
+    toast('Could not create the gist: '+msg);
+  }
+}
+
+/* ---------- triggers ---------- */
+function syncBoot(){
+  SYNC_QUIET=false;
+  renderSyncChip();
+  if(!syncOn()) return;
+  if(SYNC_STATUS==='conflict') return;
+  syncNow('boot');
+}
+
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible') return;
+  if(!syncOn()||SYNC_CFG.auto===false||SYNC_QUIET) return;
+  if(Date.now()-_syncLastFocus<SYNC_FOCUS_GAP) return;
+  _syncLastFocus=Date.now();
+  syncNow('focus');
+});
+window.addEventListener('online',()=>{
+  if(!syncOn()||SYNC_QUIET) return;
+  syncNow('online');
+});
+window.addEventListener('offline',()=>{
+  if(!syncOn()) return;
+  if(syncDirty()){ SYNC_ST.queued=true; saveSyncState(); }
+  syncSet('queued','Offline — this device\'s changes will go up when you\'re back online');
+});
 
 
 /* ============ TABS ============ */
@@ -6034,6 +6650,7 @@ document.getElementById('seqClose').onclick=()=>closeSeq(true);
 }
 
 (function(){
+  loadSync();          // first: everything below writes, and syncTouch reads this state
   load();
   loadTraining();
   loadDevLayout();
@@ -6057,10 +6674,23 @@ document.getElementById('seqClose').onclick=()=>closeSeq(true);
     exById,LIB:()=>LIB,saveLib,MSVG:()=>MSVG,WDONE:()=>WDONE,saveWDone,
     DEV_LAYOUT:()=>DEV_LAYOUT,devOrder,MUSCLE_ART:()=>MUSCLE_ART,
     get MSVG(){return MSVG;},get FX(){return FX;},get CYCLE(){return CYCLE;},saveCycle,applyFX,get TYPE_PICK(){return TYPE_PICK;},rollExercises,typeOccurrence,coreFor,poolFor,exTypes,inType,memberOf,get MMAP(){return MMAP;},set MMAP(v){MMAP=v;},saveMmap,mmParse,mmExtract,mmCommit,mmAutoMatch,renderStudioMap,get RECIPES(){return RECIPES;},muscleSlot,badgeSVG,openMuscleEditor,tierFor,get MUSCLE_ART(){return MUSCLE_ART;},
-    sym,loadSymbols,saveSymbols,openDevUI,openExercise,openDay,openDevTools,devResetStreak,loadBadges,saveBadges,badgeSVG,setDevMode,openBadgeEditor,stripDecorations,get BADGE_OVERRIDES(){return BADGE_OVERRIDES;},set BADGE_OVERRIDES(v){BADGE_OVERRIDES=v;},get WDONE(){return WDONE;},saveWDone,get PLAN(){return PLAN;},savePlan,todayKey,addDays,ensureDay,dayTotals,renderStreakCard,openProfileHub,computeUnifiedStreak,get SYM_OVERRIDES(){return SYM_OVERRIDES;},set SYM_OVERRIDES(v){SYM_OVERRIDES=v;},SYM_DEFAULTS:()=>SYM_DEFAULTS,renderProgressExtras,ACHIEVEMENTS:()=>ACHIEVEMENTS};
+    sym,loadSymbols,saveSymbols,openDevUI,openExercise,openDay,openDevTools,devResetStreak,loadBadges,saveBadges,badgeSVG,setDevMode,openBadgeEditor,stripDecorations,get BADGE_OVERRIDES(){return BADGE_OVERRIDES;},set BADGE_OVERRIDES(v){BADGE_OVERRIDES=v;},get WDONE(){return WDONE;},saveWDone,get PLAN(){return PLAN;},savePlan,todayKey,addDays,ensureDay,dayTotals,renderStreakCard,openProfileHub,computeUnifiedStreak,get SYM_OVERRIDES(){return SYM_OVERRIDES;},set SYM_OVERRIDES(v){SYM_OVERRIDES=v;},SYM_DEFAULTS:()=>SYM_DEFAULTS,renderProgressExtras,ACHIEVEMENTS:()=>ACHIEVEMENTS,
+    ALL_STORE_KEYS:()=>ALL_STORE_KEYS,gget,gset,gdel,getSchema,SCHEMA_VERSION,
+    openSyncSettings,syncNow,syncPayload,syncApply,syncSig,syncTouch,loadSync,saveSyncState,saveSyncCfg,
+    get SYNC_CFG(){return SYNC_CFG;},set SYNC_CFG(v){SYNC_CFG=v;},
+    get SYNC_ST(){return SYNC_ST;},set SYNC_ST(v){SYNC_ST=v;},
+    get SYNC_STATUS(){return SYNC_STATUS;},set SYNC_STATUS(v){SYNC_STATUS=v;},
+    get SYNC_MSG(){return SYNC_MSG;},set SYNC_MSG(v){SYNC_MSG=v;},
+    closeSheet,syncSet,
+    get SYNC_QUIET(){return SYNC_QUIET;},set SYNC_QUIET(v){SYNC_QUIET=v;},
+    syncOn,syncDirty,devExport};
   autoConsumePastDays();
   renderAll();
   requestAnimationFrame(()=>moveGlider(segBtns[0]));
+  /* Last, and only now: boot-time migration writes above are derived from local
+     data, not user edits, so they must not mark this device dirty. syncBoot()
+     drops that guard and kicks off the first pull. */
+  syncBoot();
 })();
 </script>
 
