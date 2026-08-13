@@ -1,1 +1,8 @@
 .DS_Store
+
+# AI agent tooling — installed skill packages, not part of the app.
+# skills-lock.json records which ones are in use; the packages themselves
+# are reinstallable and would otherwise dwarf the app in repo size.
+.agents/
+.claude/
+.codex/
