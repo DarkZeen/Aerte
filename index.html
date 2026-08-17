@@ -233,6 +233,58 @@ if ('serviceWorker' in navigator) {
   .hyd-stats i{font-style:normal;font-size:10px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em;}
   .hyd-empty{font-size:12px;color:var(--txt-3);text-align:center;padding:26px 0;}
 
+  /* barcode scanner — live camera + reticle */
+  .scan-stage{position:relative;width:100%;aspect-ratio:3/4;max-height:52vh;border-radius:var(--r-lg);overflow:hidden;background:#000;margin-top:14px;}
+  .scan-stage video{width:100%;height:100%;object-fit:cover;display:block;}
+  .scan-retic{position:absolute;inset:14% 8%;pointer-events:none;}
+  .scan-retic i{position:absolute;width:34px;height:34px;border:3px solid rgba(255,255,255,0.92);}
+  .scan-retic i:nth-child(1){top:0;left:0;border-right:0;border-bottom:0;border-radius:var(--r-sm) 0 0 0;}
+  .scan-retic i:nth-child(2){top:0;right:0;border-left:0;border-bottom:0;border-radius:0 var(--r-sm) 0 0;}
+  .scan-retic i:nth-child(3){bottom:0;left:0;border-right:0;border-top:0;border-radius:0 0 0 var(--r-sm);}
+  .scan-retic i:nth-child(4){bottom:0;right:0;border-left:0;border-top:0;border-radius:0 0 var(--r-sm) 0;}
+  /* sweeping line: the "actively looking" cue the reticle alone doesn't give */
+  .scan-line{position:absolute;left:8%;right:8%;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);
+    box-shadow:0 0 12px var(--red);animation:scanSweep 2.1s var(--ease) infinite;}
+  @keyframes scanSweep{0%,100%{top:16%;opacity:.35;}50%{top:82%;opacity:1;}}
+  .fx-no-scanline .scan-line{display:none;}
+  @media (prefers-reduced-motion:reduce){.scan-line{animation:none;top:50%;}}
+  .scan-hint{position:absolute;left:0;right:0;bottom:0;padding:10px 14px 12px;text-align:center;font:600 12px var(--font);color:#fff;
+    background:linear-gradient(0deg,rgba(0,0,0,.72),transparent);}
+  .scan-torch{position:absolute;top:10px;right:10px;width:38px;height:38px;border-radius:50%;border:0;background:rgba(0,0,0,.5);
+    color:#fff;font-size:17px;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+  .scan-torch.on{background:var(--orange);color:#1a1a1a;}
+  .scan-err{font-size:13px;color:var(--txt-2);line-height:1.55;padding:22px 4px;text-align:center;}
+  /* result preview before committing to the library */
+  .scan-hit{display:flex;align-items:center;gap:12px;padding:13px;margin-top:14px;background:var(--card-2);border:1px solid var(--stroke);border-radius:var(--r-md);}
+  .scan-hit .sh-nm{font-size:14px;font-weight:700;line-height:1.25;}
+  .scan-hit .sh-meta{font-size:11px;color:var(--txt-3);margin-top:3px;}
+  .scan-code{font:600 11px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--txt-3);letter-spacing:.06em;}
+
+  /* ---- daily-notes export ----
+     Rendered into the page and isolated with @media print rather than opened in
+     a new window: window.open is blocked in an installed PWA, which is exactly
+     where this gets used. */
+  #printHost{display:none;}
+  @media print{
+    body.printing>*{display:none!important;}
+    body.printing>#printHost{display:block!important;}
+    @page{margin:18mm 16mm;}
+  }
+  #printHost{color:#111;font:12px/1.55 var(--font);background:#fff;}
+  #printHost .pcover{text-align:center;padding:0 0 22px;border-bottom:2px solid #111;margin-bottom:26px;}
+  #printHost .pcover .kick{font-size:11px;letter-spacing:.3em;color:#e0533f;font-weight:800;text-transform:uppercase;}
+  #printHost .pcover h1{font-size:28px;margin:8px 0 4px;letter-spacing:-.01em;}
+  #printHost .pcover .meta{color:#777;font-size:12px;}
+  #printHost .pday{page-break-inside:avoid;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #e2e2e2;}
+  #printHost .pday:last-child{border-bottom:none;}
+  #printHost .pdate{font-size:14px;font-weight:800;margin-bottom:2px;}
+  #printHost .pdow{font-size:10.5px;color:#999;text-transform:uppercase;letter-spacing:.08em;margin-bottom:9px;}
+  #printHost .plab{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#999;font-weight:700;margin:11px 0 3px;}
+  #printHost .ptext{white-space:pre-wrap;color:#222;font-size:12px;line-height:1.6;}
+  #printHost .pfoot{margin-top:26px;padding-top:12px;border-top:1px solid #ddd;color:#999;font-size:10px;text-align:center;}
+  .nx-count{font-size:12px;color:var(--txt-2);text-align:center;padding:14px 0 2px;}
+  .nx-count b{color:var(--txt);font-size:15px;}
+
   .cta{display:block;width:100%;border:0;border-radius:var(--r-md);padding:16px;margin-top:18px;cursor:pointer;font:700 16px var(--font);color:#fff;letter-spacing:-.01em;transition:transform .2s var(--spring),box-shadow .2s;}
   .cta:active{transform:scale(.97);}
   /* darkened from #34c759/#28a745: white label on the old top stop was 2.22:1,
@@ -962,7 +1014,10 @@ if ('serviceWorker' in navigator) {
 
     <section id="tab-products" class="hide">
       <p style="font-size:13px;color:var(--txt-2);line-height:1.55;margin:8px 2px 0">Everyday items — milk, fruit, eggs — addable straight to any meal slot without building a full recipe.</p>
-      <button class="rec-act" id="dedupeProdBtn" style="margin:10px 2px 2px">⧉ Find duplicates</button>
+      <div class="rec-actions" style="margin:10px 2px 2px">
+        <button class="rec-act" id="scanProdBtn">⌷ Scan barcode</button>
+        <button class="rec-act" id="dedupeProdBtn">⧉ Find duplicates</button>
+      </div>
       <div class="reclib-grid" id="prodGrid"></div>
     </section>
 
@@ -1005,6 +1060,11 @@ if ('serviceWorker' in navigator) {
 </div>
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="sheet"><div class="sheet-inner" id="sheetInner"></div></div>
+
+<!-- zbar-wasm 0.11.0 — 1D barcode decoder (EAN-13/8, UPC-A/E). Exposes a
+     `zbarWasm` global; resolves ./zbar.wasm relative to itself, so both files
+     stay at repo root. Precached by the service worker for offline scanning. -->
+<script src="zbar-wasm.js"></script>
 
 <script>
 /* ============ CONSTANTS ============ */
@@ -2492,6 +2552,10 @@ let SHEET_RETURN=null;
 function openSheet(html){SHEET_RETURN=null;sInner.innerHTML=`<div class="grabber"></div>`+html;scrim.classList.add('show');sheet.classList.add('show');}
 function closeSheet(){
   const ret=SHEET_RETURN; SHEET_RETURN=null;
+  /* Any exit from a sheet must release the camera — closing via the scrim, the
+     back gesture, or a deferred sync all land here, and only stopScanner()
+     turns the capture indicator off. */
+  if(typeof stopScanner==='function') stopScanner();
   scrim.classList.remove('show');sheet.classList.remove('show');
   if(ret) ret();
   /* A pull that arrived while this sheet was open was held back rather than
@@ -2793,6 +2857,9 @@ function openRecipeEditor(id){
 function openProductEditor(id,opts){
   opts=opts||{};
   const isNew=!id; const p=isNew?{id:'p'+Date.now(),name:'',unit:'100g',price:0,kcal:0,protein:0,carbs:0,fat:0,fiber:0,amountMode:'default',defaultAmount:1,baseUnit:'g',unitSize:100}:prodById(id);
+  /* Scanned data lands here as a prefill rather than a direct save — the fields
+     stay editable and nothing enters the library until the user presses Save. */
+  if(isNew&&opts.prefill) Object.assign(p,opts.prefill);
   const bu=p.baseUnit||'g', us=p.unitSize||1;
   openSheet(`<h3>${isNew?'New Product':'Edit Product'}</h3><div class="meta">Macros are per ONE priced unit. Base unit is how you count stock &amp; log meals (g / ml / pcs).</div>
     <div class="field2" style="margin-top:14px"><div class="field" style="margin-top:0"><label>Name</label><input id="qName" value="${p.name}" placeholder="e.g. Milk"></div><div class="field" style="margin-top:0"><label>Priced unit label</label><input id="qUnit" value="${p.unit}" placeholder="e.g. 100g / 1 item"></div></div>
@@ -2817,6 +2884,236 @@ function openProductEditor(id,opts){
   const d=document.getElementById('qDel');if(d)d.onclick=async()=>{PRODUCTS=PRODUCTS.filter(x=>x.id!==id);await saveProducts();closeSheet();renderProdGrid();};
   document.getElementById('qCancel').onclick=opts.returnTo==='shopPicker'?openProductToShopPicker:closeSheet;
 }
+/* ============ BARCODE SCANNER → OPEN FOOD FACTS ============
+   Camera → zbar-wasm decodes the EAN/UPC on-device → Open Food Facts fills in
+   the macros. No API key, no per-scan cost, and a cache hit works offline.
+
+   Decoding is deliberately local: a round trip to any vision service is 2-3s,
+   which is the difference between "it just fills in" and "I'll type it myself".
+
+   Lookups are cached under a key that is NOT in ALL_STORE_KEYS — it is derived,
+   re-fetchable data, so it stays out of the sync blob and the export file. gset
+   on an unlisted key is a no-op for syncTouch, which is exactly what we want. */
+const OFF_CACHE_KEY='aerte_off_cache';
+const OFF_FIELDS='code,product_name,product_name_en,brands,quantity,product_quantity,product_quantity_unit,nutriments,nutriscore_grade';
+
+function offCacheGet(code){
+  try{ const r=gget(OFF_CACHE_KEY); if(!r) return null; return (JSON.parse(r.value)||{})[code]||null; }catch(e){ return null; }
+}
+function offCachePut(code,data){
+  try{
+    const r=gget(OFF_CACHE_KEY); const c=r?JSON.parse(r.value):{};
+    c[code]=data;
+    /* bounded: keep the most recent 300 so a year of shopping can't grow the
+       store without limit and trip gset's quota guard. */
+    const keys=Object.keys(c);
+    if(keys.length>300) keys.slice(0,keys.length-300).forEach(k=>delete c[k]);
+    gset(OFF_CACHE_KEY,JSON.stringify(c));
+  }catch(e){}
+}
+
+async function offLookup(code){
+  const cached=offCacheGet(code);
+  if(cached) return {...cached,_cached:true};
+  const r=await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=${OFF_FIELDS}`,
+    {headers:{'Accept':'application/json'}});
+  if(!r.ok) throw new Error('Lookup failed ('+r.status+')');
+  const j=await r.json();
+  if(j.status!==1||!j.product) return null;
+  const p=offToProduct(j.product,code);
+  offCachePut(code,p);
+  return p;
+}
+
+/* OFF publishes macros per 100 g or per 100 ml. The product model stores macros
+   per ONE priced unit with unitSize base units in it — so "100g" / base g /
+   size 100 maps the two exactly, with no arithmetic to get wrong. */
+function offToProduct(o,code){
+  const n=o.nutriments||{};
+  const r1=v=>{const x=+v; return isFinite(x)?Math.round(x*10)/10:0;};
+  const qty=String(o.quantity||'');
+  const liquid=/(^|[\s\d])(ml|cl|l|litre|liter)\b/i.test(qty)||/^(ml|l)$/i.test(o.product_quantity_unit||'');
+  const baseUnit=liquid?'ml':'g';
+  const pkg=+o.product_quantity||0;   // package size in base units
+  const brand=(o.brands||'').split(',')[0].trim();
+  const nm=(o.product_name||o.product_name_en||'').trim()||'Unknown product';
+  return {
+    barcode:code,
+    name: brand && !nm.toLowerCase().includes(brand.toLowerCase()) ? `${nm} · ${brand}` : nm,
+    unit:'100'+baseUnit, baseUnit, unitSize:100,
+    kcal:Math.round(+n['energy-kcal_100g']||0),
+    protein:r1(n.proteins_100g), carbs:r1(n.carbohydrates_100g),
+    fat:r1(n.fat_100g), fiber:r1(n.fiber_100g),
+    /* price is the one thing OFF has no reliable data for — left at 0 so the
+       cost tracking stays honest rather than silently wrong. */
+    price:0,
+    defaultAmount: pkg>0?pkg:100,
+    amountMode:'default',
+    qtyLabel:qty, nutriscore:o.nutriscore_grade||''
+  };
+}
+
+let SCAN_STREAM=null, SCAN_RAF=null, SCAN_BUSY=false;
+function stopScanner(){
+  if(SCAN_RAF){ clearTimeout(SCAN_RAF); SCAN_RAF=null; }
+  /* Releasing the tracks is not optional — leave them and iOS keeps the camera
+     indicator lit after the sheet closes, which reads as the app spying. */
+  if(SCAN_STREAM){ SCAN_STREAM.getTracks().forEach(t=>t.stop()); SCAN_STREAM=null; }
+  SCAN_BUSY=false;
+}
+
+function openBarcodeScanner(){
+  openSheet(`<h3>Scan a barcode</h3>
+    <div class="meta">Point at the barcode on the pack. Nutrition comes from Open Food Facts.</div>
+    <div id="scanBody"></div>
+    <button class="cta ghost" id="scanManual">Enter barcode by hand</button>
+    <button class="cta ghost" id="scanCancel">Cancel</button>`);
+  document.getElementById('scanCancel').onclick=()=>{ stopScanner(); closeSheet(); };
+  document.getElementById('scanManual').onclick=()=>{ stopScanner(); openManualBarcode(); };
+  startScanner();
+}
+
+async function startScanner(){
+  const body=document.getElementById('scanBody'); if(!body) return;
+  if(typeof zbarWasm==='undefined'){
+    body.innerHTML=`<div class="scan-err">Barcode decoder didn't load. If you just updated, close and reopen the app.</div>`; return;
+  }
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    body.innerHTML=`<div class="scan-err">This browser can't open the camera. Use “Enter barcode by hand” below.</div>`; return;
+  }
+  body.innerHTML=`<div class="scan-stage">
+      <video id="scanVid" playsinline autoplay muted></video>
+      <div class="scan-retic"><i></i><i></i><i></i><i></i></div>
+      <div class="scan-line"></div>
+      <button class="scan-torch" id="scanTorch" aria-label="Torch">🔦</button>
+      <div class="scan-hint" id="scanHint">Looking for a barcode…</div>
+    </div>`;
+  const vid=document.getElementById('scanVid');
+  try{
+    SCAN_STREAM=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:960}},audio:false});
+  }catch(e){
+    const denied=/NotAllowed|Permission/i.test(e.name+e.message);
+    body.innerHTML=`<div class="scan-err">${denied
+      ? 'Camera access was denied. Allow it in Settings → Safari → Camera, then try again.'
+      : 'Could not start the camera: '+esc(e.message)}</div>`;
+    return;
+  }
+  vid.srcObject=SCAN_STREAM;
+  /* playsinline is set on the element too — without it iOS takes the video
+     fullscreen and the sheet's controls disappear behind it. */
+  vid.setAttribute('playsinline','');
+  try{ await vid.play(); }catch(e){}
+
+  // torch, where the device exposes it
+  const track=SCAN_STREAM.getVideoTracks()[0];
+  const caps=track.getCapabilities?track.getCapabilities():{};
+  const tb=document.getElementById('scanTorch');
+  if(!caps.torch){ tb.style.display='none'; }
+  else tb.onclick=async()=>{
+    const on=!tb.classList.contains('on');
+    try{ await track.applyConstraints({advanced:[{torch:on}]}); tb.classList.toggle('on',on); }catch(e){}
+  };
+
+  const cv=document.createElement('canvas'), ctx=cv.getContext('2d',{willReadFrequently:true});
+  const tick=async()=>{
+    if(!SCAN_STREAM||SCAN_BUSY) return;
+    if(vid.readyState>=2&&vid.videoWidth){
+      SCAN_BUSY=true;
+      try{
+        /* Downscale to ~640px before decoding: a 1280px frame costs several
+           times the CPU for no gain on a barcode that fills the reticle. */
+        const scale=Math.min(1,640/vid.videoWidth);
+        cv.width=Math.round(vid.videoWidth*scale); cv.height=Math.round(vid.videoHeight*scale);
+        ctx.drawImage(vid,0,0,cv.width,cv.height);
+        const syms=await zbarWasm.scanImageData(ctx.getImageData(0,0,cv.width,cv.height));
+        const hit=(syms||[]).map(s=>s.decode&&s.decode()).find(v=>v&&/^\d{8,14}$/.test(v));
+        if(hit){ stopScanner(); onBarcode(hit); return; }
+      }catch(e){}
+      SCAN_BUSY=false;
+    }
+    SCAN_RAF=setTimeout(tick,150);   // ~6-7 fps is plenty and saves battery
+  };
+  SCAN_RAF=setTimeout(tick,300);
+}
+
+function openManualBarcode(){
+  openSheet(`<h3>Enter barcode</h3>
+    <div class="meta">The 8–13 digit number printed under the bars.</div>
+    <div class="field" style="margin-top:14px"><input id="mbCode" type="tel" inputmode="numeric" placeholder="e.g. 4304493270282"></div>
+    <button class="cta red" id="mbGo">Look up</button>
+    <button class="cta ghost" id="mbCancel">Cancel</button>`);
+  const go=()=>{
+    const v=(document.getElementById('mbCode').value||'').replace(/\D/g,'');
+    if(v.length<8){ toast('That looks too short for a barcode'); return; }
+    onBarcode(v);
+  };
+  document.getElementById('mbGo').onclick=go;
+  document.getElementById('mbCode').addEventListener('keydown',e=>{ if(e.key==='Enter')go(); });
+  document.getElementById('mbCancel').onclick=closeSheet;
+  setTimeout(()=>{const i=document.getElementById('mbCode'); if(i)i.focus();},250);
+}
+
+async function onBarcode(code){
+  /* Already in the library → open it for editing rather than making a twin.
+     The app has a dedupe tool precisely because duplicates accumulate. */
+  const known=PRODUCTS.find(p=>p.barcode===code);
+  if(known){ closeSheet(); toast('Already in your products'); openProductEditor(known.id); return; }
+
+  openSheet(`<h3>Looking up…</h3><div class="meta scan-code">${esc(code)}</div>
+    <div class="scan-err" id="lkBody">Checking Open Food Facts…</div>`);
+  let data=null, err=null;
+  try{ data=await offLookup(code); }catch(e){ err=e; }
+
+  const setTitle=t=>{ const h=document.querySelector('#sheetInner h3'); if(h)h.textContent=t; };
+  if(err){
+    setTitle('Lookup failed');
+    document.getElementById('lkBody').innerHTML=
+      `Couldn't reach Open Food Facts.<br>${esc(err.message)}<br><br>You can still add it by hand.`;
+    appendLookupActions(code,null); return;
+  }
+  if(!data){
+    setTitle('Not found');
+    document.getElementById('lkBody').innerHTML=
+      `Not in the Open Food Facts database yet.<br>Add it by hand — the barcode is saved, so next scan finds it instantly.`;
+    appendLookupActions(code,null); return;
+  }
+  showScanHit(code,data);
+}
+
+function showScanHit(code,d){
+  const macros=`${d.kcal} kcal · ${d.protein}g P · ${d.carbs}g C · ${d.fat}g F${d.fiber?` · ${d.fiber}g fiber`:''}`;
+  openSheet(`<h3>Found it</h3><div class="meta scan-code">${esc(code)}${d._cached?' · cached':''}</div>
+    <div class="scan-hit">
+      <div style="font-size:26px">🛒</div>
+      <div style="flex:1;min-width:0">
+        <div class="sh-nm">${esc(d.name)}</div>
+        <div class="sh-meta">${esc(macros)} — per 100${d.baseUnit}</div>
+        ${d.qtyLabel?`<div class="sh-meta">Pack: ${esc(d.qtyLabel)}${d.nutriscore?` · Nutri-Score ${d.nutriscore.toUpperCase()}`:''}</div>`:''}
+      </div>
+    </div>
+    <p style="font-size:11px;color:var(--txt-3);margin:10px 2px 0;line-height:1.5">
+      Data from Open Food Facts. Check the numbers against the pack before saving — community data can be wrong or out of date. Price isn't included, so add yours on the next screen.</p>
+    <button class="cta red" id="shAdd">Add to products</button>
+    <button class="cta ghost" id="shRescan">Scan another</button>
+    <button class="cta ghost" id="shCancel">Cancel</button>`);
+  document.getElementById('shAdd').onclick=()=>openProductEditor(null,{prefill:d});
+  document.getElementById('shRescan').onclick=openBarcodeScanner;
+  document.getElementById('shCancel').onclick=closeSheet;
+}
+
+function appendLookupActions(code,d){
+  const host=document.getElementById('lkBody'); if(!host) return;
+  const wrap=document.createElement('div');
+  wrap.innerHTML=`<button class="cta red" id="lkManual">Add by hand</button>
+    <button class="cta ghost" id="lkRetry">Try again</button>
+    <button class="cta ghost" id="lkCancel">Cancel</button>`;
+  host.parentNode.appendChild(wrap);
+  document.getElementById('lkManual').onclick=()=>openProductEditor(null,{prefill:{barcode:code}});
+  document.getElementById('lkRetry').onclick=()=>onBarcode(code);
+  document.getElementById('lkCancel').onclick=closeSheet;
+}
+
 function openSupplementEditor(id){
   const isNew=!id; const s=isNew?{id:'sup'+Date.now(),name:'',brand:'',serving:'',price:0,kcal:0,protein:0,carbs:0,fat:0,fiber:0}:suppById(id);
   openSheet(`<h3>${isNew?'New Supplement':'Edit Supplement'}</h3>
@@ -2862,7 +3159,11 @@ document.getElementById('recSearch').addEventListener('input',e=>{recQuery=e.tar
 
 function renderProdGrid(){
   const g=document.getElementById('prodGrid');if(!g)return;
-  if(!PRODUCTS.length){g.innerHTML=`<div class="empty" style="grid-column:1/-1">No products yet.</div>`;return;}
+  /* Bind the toolbar before the empty-library return — an empty library is
+     exactly when you want to scan your first item. */
+  const dd0=document.getElementById('dedupeProdBtn'); if(dd0) dd0.onclick=openDedupeSheet;
+  const sc0=document.getElementById('scanProdBtn');   if(sc0) sc0.onclick=openBarcodeScanner;
+  if(!PRODUCTS.length){g.innerHTML=`<div class="empty" style="grid-column:1/-1">No products yet — scan a barcode to add one.</div>`;return;}
   g.innerHTML='';
   PRODUCTS.forEach((p,i)=>{const c=document.createElement('div');c.className='rcard';c.style.animationDelay=(i*0.03)+'s';
     c.innerHTML=`<div class="rtop"><div class="rnm">${p.name}</div></div>
@@ -2870,8 +3171,6 @@ function renderProdGrid(){
       <div style="font-size:11px;color:var(--txt-3);margin-top:4px">per ${p.unit} · €${(+p.price).toFixed(2)}</div>`;
     c.onclick=()=>openProductEditor(p.id);g.appendChild(c);
   });
-  const dd=document.getElementById('dedupeProdBtn');
-  if(dd) dd.onclick=openDedupeSheet;
 }
 // #3 — review duplicate product groups, choose a keeper, merge the rest into it
 function openDedupeSheet(){
@@ -3967,6 +4266,138 @@ function exportRecipesPDF(list){
   w.document.write(doc);w.document.close();
   // give it a moment to lay out, then invoke print (user chooses Save as PDF)
   setTimeout(()=>{try{w.focus();w.print();}catch(e){}},400);
+}
+
+/* ============ DAILY NOTES EXPORT ============
+   Both note streams keyed by the same YYYY-MM-DD, merged per day:
+     WNOTES[key]        training notes
+     PLAN[key].notes    day notes
+   Periods come from periodKeys()/periodLabel() — the same helpers the hydration
+   graph uses, so "this month" means the same thing in both places. */
+let NOTES_PERIOD='month', NOTES_OFF=0;
+
+function collectNotes(period,off){
+  const out=[];
+  periodKeys(period,off).forEach(k=>{
+    const t=((WNOTES&&WNOTES[k])||'').trim();
+    const d=((PLAN[k]&&PLAN[k].notes)||'').trim();
+    if(!t&&!d) return;            // empty days are skipped, not printed blank
+    out.push({key:k,training:t,day:d});
+  });
+  return out;
+}
+
+function notesBodyHTML(entries,label){
+  const today=new Date().toLocaleDateString(undefined,{day:'numeric',month:'long',year:'numeric'});
+  const days=entries.map(e=>{
+    const dt=dateOf(e.key);
+    return `<div class="pday">
+      <div class="pdate">${esc(dt.toLocaleDateString(undefined,{day:'numeric',month:'long',year:'numeric'}))}</div>
+      <div class="pdow">${esc(dt.toLocaleDateString(undefined,{weekday:'long'}))}</div>
+      ${e.training?`<div class="plab">Training</div><div class="ptext">${esc(e.training)}</div>`:''}
+      ${e.day?`<div class="plab">Day</div><div class="ptext">${esc(e.day)}</div>`:''}
+    </div>`;
+  }).join('');
+  return `<div class="pcover">
+      <div class="kick">Aerte</div>
+      <h1>Daily Notes</h1>
+      <div class="meta">${esc(label)} · ${entries.length} ${entries.length===1?'entry':'entries'}</div>
+    </div>
+    ${days}
+    <div class="pfoot">Exported ${esc(today)}</div>`;
+}
+
+/* PDF goes through the browser's own print dialog ("Save as PDF"). No library,
+   works offline, and staying in-page keeps it working inside the installed PWA
+   where a popup would be blocked. */
+function exportNotesPDF(period,off){
+  const entries=collectNotes(period,off);
+  if(!entries.length){ toast('No notes in this period'); return; }
+  let host=document.getElementById('printHost');
+  if(!host){ host=document.createElement('div'); host.id='printHost'; document.body.appendChild(host); }
+  host.innerHTML=notesBodyHTML(entries,periodLabel(period,off));
+  document.body.classList.add('printing');
+  const cleanup=()=>{
+    document.body.classList.remove('printing');
+    host.innerHTML='';
+    window.removeEventListener('afterprint',cleanup);
+  };
+  window.addEventListener('afterprint',cleanup);
+  /* Safari fires afterprint unreliably; the timer guarantees the app comes back
+     even if the event never lands. */
+  setTimeout(cleanup,60000);
+  setTimeout(()=>{ try{ window.print(); }catch(e){ cleanup(); toast('Printing not available here'); } },140);
+}
+
+/* Word gets the same markup as a .doc — Word and Pages both open it, and it
+   needs no library. */
+function exportNotesWord(period,off){
+  const entries=collectNotes(period,off);
+  if(!entries.length){ toast('No notes in this period'); return; }
+  const label=periodLabel(period,off);
+  const css=`body{font-family:Calibri,Arial,sans-serif;color:#111;font-size:12pt;line-height:1.5;}
+    .pcover{text-align:center;border-bottom:2px solid #111;padding-bottom:14px;margin-bottom:20px;}
+    .pcover .kick{font-size:9pt;letter-spacing:3px;color:#e0533f;font-weight:bold;text-transform:uppercase;}
+    .pcover h1{font-size:22pt;margin:6px 0 4px;}
+    .pcover .meta{color:#777;font-size:10pt;}
+    .pday{margin-bottom:16pt;padding-bottom:10pt;border-bottom:1px solid #e2e2e2;}
+    .pdate{font-size:12pt;font-weight:bold;}
+    .pdow{font-size:8.5pt;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:6pt;}
+    .plab{font-size:8.5pt;text-transform:uppercase;letter-spacing:1px;color:#999;font-weight:bold;margin:8pt 0 2pt;}
+    .ptext{white-space:pre-wrap;color:#222;font-size:11pt;}
+    .pfoot{margin-top:18pt;padding-top:8pt;border-top:1px solid #ddd;color:#999;font-size:9pt;text-align:center;}`;
+  const doc=`<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
+    <head><meta charset="utf-8"><title>Aerte — Daily Notes — ${esc(label)}</title><style>${css}</style></head>
+    <body>${notesBodyHTML(entries,label)}</body></html>`;
+  const slug=label.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  downloadFile(`aerte-notes-${slug||'export'}.doc`,doc,'application/msword');
+  toast(`Exported ${entries.length} ${entries.length===1?'entry':'entries'}`);
+}
+
+function openNotesExport(){
+  const paint=()=>{
+    const entries=collectNotes(NOTES_PERIOD,NOTES_OFF);
+    const keys=periodKeys(NOTES_PERIOD,NOTES_OFF);
+    const first=notesFirstKey();
+    const atStart=keys[keys.length-1]<first;
+    openSheet(`<h3>Export daily notes</h3>
+      <div class="meta">Training notes and day notes for one period, dated, empty days skipped.</div>
+      <div class="filt" style="margin-top:12px">
+        ${['week','month','year'].map(p=>`<button data-np="${p}" class="${NOTES_PERIOD===p?'on':''}">${cap(p)}</button>`).join('')}
+      </div>
+      <div class="sumcard" style="padding:14px 16px;margin-top:12px">
+        <div class="hyd-head" style="margin:0">
+          <div class="hyd-nav"><button id="nxPrev" ${atStart?'disabled':''} aria-label="Previous">‹</button></div>
+          <div class="hyd-range">${esc(periodLabel(NOTES_PERIOD,NOTES_OFF))}</div>
+          <div class="hyd-nav"><button id="nxNext" ${NOTES_OFF>=0?'disabled':''} aria-label="Next">›</button></div>
+        </div>
+        <div class="nx-count"><b>${entries.length}</b> ${entries.length===1?'day with notes':'days with notes'}</div>
+      </div>
+      <button class="cta red" id="nxPdf" ${entries.length?'':'disabled style="opacity:.4"'}>⎙ Save as PDF</button>
+      <button class="cta ghost" id="nxDoc" ${entries.length?'':'disabled style="opacity:.4"'}>⬇︎ Download for Word (.doc)</button>
+      <button class="cta ghost" id="nxCancel">Cancel</button>`);
+    sInner.querySelectorAll('[data-np]').forEach(b=>b.onclick=()=>{
+      if(NOTES_PERIOD===b.dataset.np) return;
+      NOTES_PERIOD=b.dataset.np; NOTES_OFF=0; paint();
+    });
+    const p=document.getElementById('nxPrev'), n=document.getElementById('nxNext');
+    if(p) p.onclick=()=>{ NOTES_OFF--; paint(); };
+    if(n) n.onclick=()=>{ NOTES_OFF++; paint(); };
+    document.getElementById('nxPdf').onclick=()=>{ if(entries.length){ closeSheet(); exportNotesPDF(NOTES_PERIOD,NOTES_OFF); } };
+    document.getElementById('nxDoc').onclick=()=>{ if(entries.length) exportNotesWord(NOTES_PERIOD,NOTES_OFF); };
+    document.getElementById('nxCancel').onclick=closeSheet;
+  };
+  paint();
+}
+
+/* Earliest day either stream knows about — bounds the ‹ nav so you can't page
+   back through years that were never tracked. */
+function notesFirstKey(){
+  let first=null;
+  const seen=k=>{ if(/^\d{4}-\d{2}-\d{2}$/.test(k)&&(!first||k<first)) first=k; };
+  for(const k in PLAN) if(PLAN[k]&&(PLAN[k].notes||'').trim()) seen(k);
+  for(const k in (WNOTES||{})) if((WNOTES[k]||'').trim()) seen(k);
+  return first||todayKey();
 }
 
 function downloadFile(filename,text,mime){
@@ -6145,6 +6576,7 @@ function openDevTools(){
   openSheet(`<h3>Data tools</h3>
     <button class="cta ghost" id="devExport">⬇︎ Export all data (JSON)</button>
     <button class="cta ghost" id="devImport">⬆︎ Import data from file</button>
+    <button class="cta ghost" id="devNotes">✎ Export daily notes (PDF / Word)</button>
     <button class="cta ghost" id="devSync">☁︎ Cross-device sync${syncOn()?' · on':' · off'}</button>
     <input type="file" id="devFile" accept="application/json" style="display:none">
     <div class="dev-danger">
@@ -6156,6 +6588,7 @@ function openDevTools(){
     <p style="font-size:11px;color:var(--txt-3);margin-top:12px;line-height:1.5">Export writes a single JSON file with every store (schema v${getSchema()}, ${ALL_STORE_KEYS.length} keys). Import replaces current data. Reset clears day-by-day logs but keeps your libraries.</p>`);
   document.getElementById('devExport').onclick=devExport;
   document.getElementById('devImport').onclick=()=>document.getElementById('devFile').click();
+  document.getElementById('devNotes').onclick=openNotesExport;
   document.getElementById('devSync').onclick=openSyncSettings;
   document.getElementById('devFile').onchange=devImport;
   document.getElementById('devResetStreak').onclick=devResetStreak;
@@ -6237,6 +6670,10 @@ function devWipe(){
   try{
     ALL_STORE_KEYS.forEach(k=>gdel(k));
     gdel(SYNC_CFG_KEY); gdel(SYNC_STATE_KEY);
+    /* Also the barcode lookup cache. It holds no personal data, but "erase
+       EVERYTHING" should leave nothing behind — and like the sync keys it sits
+       outside ALL_STORE_KEYS, so the loop above doesn't reach it. */
+    gdel(OFF_CACHE_KEY);
   } finally { SYNC_APPLYING=false; }
   if(hadSync) toast('Wiped — sync disconnected too');
   setTimeout(()=>location.reload(),400);

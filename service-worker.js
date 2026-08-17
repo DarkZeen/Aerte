@@ -3,7 +3,7 @@
    actually reach devices — without it, "I pushed a change but still see the
    old version" is what happens, because the cache name never changes so the
    old cache is reused forever. One line to remember per release. */
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 
 const CACHE_NAME = `aerte-shell-${CACHE_VERSION}`;
 
@@ -15,6 +15,12 @@ const PRECACHE = [
   './icon-512.png',
   './apple-touch-icon.png',
   './favicon.png',
+  /* Barcode decoder. Precached so scanning works with no signal — the whole
+     point of decoding on-device is lost if the decoder itself needs the network.
+     Open Food Facts lookups are cross-origin and skipped by the fetch handler;
+     they fall back to the app's own lookup cache when offline. */
+  './zbar-wasm.js',
+  './zbar.wasm',
 ];
 
 self.addEventListener('install', (event) => {
