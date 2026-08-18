@@ -3594,15 +3594,22 @@ const GH_STATE_KEY='aerte_gh_state';  // {lastOkAt, consentAt, days}
 const GH_API   ='https://health.googleapis.com/v4';
 const GH_AUTH  ='https://accounts.google.com/o/oauth2/v2/auth';
 const GH_TOKEN ='https://oauth2.googleapis.com/token';
+/* Every stream this app reads needs its scope listed HERE, not just enabled in
+   the Cloud console. The console decides what a user may be offered; this array
+   decides what is actually asked for, and the token only ever carries what was
+   asked. Adding a data type without adding its scope here produces a 403 that
+   looks exactly like a console misconfiguration and sends you to the wrong
+   place. health_metrics covers HRV, resting heart rate, heart rate and VO2 max. */
 const GH_SCOPES=[
   'https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly',
   'https://www.googleapis.com/auth/googlehealth.sleep.readonly',
+  'https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly',
 ].join(' ');
 const GH_FOCUS_GAP=15*60*1000;   // a pull per quarter hour of foreground is plenty
 const GH_BACKFILL=90;            // first successful pull reaches this far back
 
 let GH_CFG={clientId:'',secret:'',refresh:'',auto:true};
-let GH_ST ={lastOkAt:0,consentAt:0,days:0};
+let GH_ST ={lastOkAt:0,consentAt:0,days:0,scopes:''};
 let GH_STATUS='off';             // off | idle | pulling | reauth | error
 let GH_MSG='';
 let _ghTok='', _ghTokExp=0, _ghFocus=0;
@@ -3700,7 +3707,12 @@ async function ghFromURL(){
     }
     GH_CFG.refresh=t.refresh_token; saveGHCfg();
     _ghTok=t.access_token||''; _ghTokExp=Date.now()+((+t.expires_in||3600)-60)*1000;
-    GH_ST.consentAt=Date.now(); saveGHState();
+    GH_ST.consentAt=Date.now();
+    /* The token response says which scopes were actually granted. Storing it
+       turns "no HRV" from a guess into something the settings screen can state:
+       either you unticked it, or it was never requested. */
+    GH_ST.scopes=String(t.scope||'');
+    saveGHState();
     ghSet('idle','');
     toast('Google Health connected');
     return await ghPull(GH_ST.lastOkAt?14:GH_BACKFILL,true);
@@ -3908,7 +3920,7 @@ async function ghPull(daysBack,manual){
        A 403 here is nearly always the scope, not the data. */
     const m=String(e.message||e);
     ghSet('error',/\b403\b/.test(m)
-      ? 'Google refused the request — check activity_and_fitness.readonly is added under Data Access and was ticked on the consent screen.'
+      ? 'Google refused the request. Check all three scopes are added under Data Access, then Reconnect Google so the sign-in picks them up.'
       : m);
     return 0;
   }
@@ -3970,7 +3982,7 @@ function ghExpiryNote(){
 
 function openGoogleHealth(){
   openSheet(`<h3>Google Health</h3>
-    <div class="meta">Pulls steps and sleep from your Fitbit Air straight into the week view. The client ID, secret and sign-in stay on this device — they are never put in the gist or in a backup file.</div>
+    <div class="meta">Pulls steps, distance, sleep stages, heart rate, readiness and detected workouts from your Fitbit Air. The client ID, secret and sign-in stay on this device; they are never put in the gist or in a backup file.</div>
     <div id="ghBody"></div>`);
   renderGHBody();
 }
@@ -3980,6 +3992,11 @@ function renderGHBody(){
   const label={off:'Not connected',idle:'Connected',pulling:'Fetching…',
                reauth:'Sign-in expired',error:'Error'}[GH_STATUS]||GH_STATUS;
   const autoOn=GH_CFG.auto!==false, note=ghExpiryNote();
+  /* Compare asked against granted rather than inferring from a failed call. */
+  const missing=ghOn()&&GH_ST.scopes
+    ? GH_SCOPES.split(' ').filter(x=>GH_ST.scopes.split(/\s+/).indexOf(x)<0)
+        .map(x=>x.replace('https://www.googleapis.com/auth/googlehealth.',''))
+    : [];
   host.innerHTML=`
     <div class="sync-stat s-${GH_STATUS==='reauth'?'waiting':GH_STATUS}">
       <span class="sc-dot"></span><span>${esc(label)}</span>
@@ -3987,6 +4004,7 @@ function renderGHBody(){
     </div>
     ${GH_MSG?`<div class="sync-note ${GH_STATUS==='error'?'bad':'warn'}">${esc(GH_MSG)}</div>`:''}
     ${note?`<div class="sync-note warn">${esc(note)}</div>`:''}
+    ${missing.length?`<div class="sync-note bad">This sign-in is missing ${esc(missing.join(', '))}. Add the scope under Data Access in the Cloud console, then Reconnect Google.</div>`:''}
 
     <div class="field"><label>OAuth client ID</label>
       <input id="ghId" type="text" inputmode="latin" autocomplete="off" spellcheck="false"
@@ -4007,7 +4025,7 @@ function renderGHBody(){
 
     <p class="mm-note">Setup: <b>console.cloud.google.com</b> → new project → enable <b>Google Health API</b> → Credentials → OAuth client ID → <b>Web application</b>. Add this exact redirect URI:</p>
     <p class="mm-note" style="user-select:all;word-break:break-all"><b>${esc(ghRedirectUri())}</b></p>
-    <p class="mm-note">Add the same string under <b>Authorized JavaScript origins</b> as <b>${esc(location.origin)}</b>. Then Audience → add your own Google account under <b>Test users</b>, and Data Access → add the <b>activity_and_fitness.readonly</b> and <b>sleep.readonly</b> scopes.</p>
+    <p class="mm-note">Add the same string under <b>Authorized JavaScript origins</b> as <b>${esc(location.origin)}</b>. Then Audience → add your own Google account under <b>Test users</b>, and Data Access → add all three scopes: <b>activity_and_fitness.readonly</b>, <b>sleep.readonly</b> and <b>health_metrics_and_measurements.readonly</b>.</p>
     <p class="mm-note">The Fitbit app must be signed in with the same Google account — that is what links the Air to this data. Weight still comes from the Apple Health shortcut; the Air has no scale.</p>`;
 
   document.getElementById('ghAuto').onclick=()=>{ GH_CFG.auto=!(GH_CFG.auto!==false); saveGHCfg(); renderGHBody(); };
