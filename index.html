@@ -31,6 +31,14 @@ if ('serviceWorker' in navigator) {
     --m-base:#262626; --m-idle:#9a9a9a; --m-prim:var(--red); --m-sec:var(--orange);
     --m-line:#6d6d75;   /* fascia / separation lines in the full-body figures */
     --green:#30d158; --blue:#0a84ff; --orange:#ff9f0a; --purple:#bf5af2; --teal:#5ac8fa;
+    --pink:#ff375f;                                   /* cardio day type */
+    --water-1:#5ac8fa; --water-2:#0a84ff;             /* water ring + hydration bars */
+    --red-ink:#ff8a82;                                /* text on --red-soft chips */
+    --red-line:rgba(255,69,58,0.3);                   /* hairlines on red-tinted chips */
+    --cta-grad:linear-gradient(180deg,#ff453a,#e0352b);
+    --sh-cta:0 8px 24px rgba(255,69,58,0.3);
+    --sel-glow:rgba(255,69,58,0.25);                  /* selected day chip halo */
+    --heat-train:rgba(255,69,58,0.6); --heat-log:rgba(10,132,255,0.5);
     /* radius ladder: every corner in the app snaps to one of these.
        micro-geometry (progress bars, swatches) and the organic blob art stay literal. */
     --r-xs:8px; --r-sm:12px; --r-md:16px; --r-lg:20px; --r-xl:24px; --r-2xl:28px; --r-pill:999px;
@@ -74,6 +82,77 @@ if ('serviceWorker' in navigator) {
     --seg-bg:rgba(0,0,0,0.04); --ring-track:rgba(0,0,0,0.1);
     --sh-sheet:0 -20px 60px rgba(0,0,0,0.18); --sh-toast:0 10px 40px rgba(0,0,0,0.16); --sh-fab:0 10px 30px rgba(255,69,58,0.35);
   }
+  /* ---------------- GRAYSCALE THEME ----------------
+     Not a filter and not a luminance conversion. Converting the palette by
+     luminance collapses red(#8a8a8a), blue(#858585), purple(#878787),
+     cardio(#878787) and txt-3(#868686) onto the same value — which would make
+     day types, macro bars and the split chart unreadable, since colour is what
+     distinguishes them. The hues are therefore respread across deliberately
+     separated lightness steps, keeping every pair that appears side by side
+     distinguishable. --red keeps the luminance of #ff453a exactly, so white
+     text on primary buttons holds the same 3.4:1 it has in dark mode. */
+  :root[data-theme="gray"], [data-theme="gray"]{
+    --bg-0:#000000; --bg-1:#0a0a0a; --bg-2:#141414;
+    --card:rgba(28,28,28,0.55); --card-2:rgba(40,40,40,0.5);
+    --stroke:rgba(255,255,255,0.08); --stroke-2:rgba(255,255,255,0.14);
+    --txt:#f4f4f4; --txt-2:#a0a0a0; --txt-3:#7c7c7c;
+
+    /* Lightness ladder, spread upward from the text floor. Everything here is
+       read AS text/accent on a near-black background, so nothing may sit below
+       ~#7c (4.5:1). --red is pinned at #8c because it is the one token that
+       also serves as a fill with white text on it — the same double duty
+       #ff453a does in dark mode, and at the same two contrast ratios
+       (5.9:1 as text, 3.4:1 under white). The rest fan out above it.
+         rest #7c < push #8c < cardio #9c < teal #a8 < legs #b4 < green #c0
+         < pull #cc < core #e8                                              */
+    --red:#8c8c8c;     /* primary · push · kcal   5.9:1 / 3.4:1 */
+    --pink:#9c9c9c;    /* cardio                  7.2:1 */
+    --teal:#a8a8a8;
+    --purple:#b4b4b4;  /* legs · fat              9.6:1 */
+    --green:#c0c0c0;
+    --blue:#cccccc;    /* pull · protein · water 12.3:1 */
+    --orange:#e8e8e8;  /* core · carbs           16.2:1 */
+
+    --red-soft:rgba(255,255,255,0.13);
+    --red-ink:#d8d8d8;
+    --red-line:rgba(255,255,255,0.28);
+    --cta-grad:linear-gradient(180deg,#9a9a9a,#7a7a7a);
+    --sh-cta:0 8px 24px rgba(255,255,255,0.10);
+    --sel-glow:rgba(255,255,255,0.22);
+    --heat-train:rgba(255,255,255,0.62); --heat-log:rgba(255,255,255,0.30);
+    --water-1:#dcdcdc; --water-2:#909090;
+
+    --m-base:#242424; --m-idle:#9a9a9a; --m-line:#6d6d6d;
+    --header-grad:linear-gradient(180deg,rgba(10,10,10,0.92),rgba(10,10,10,0.4) 70%,transparent);
+    --sheet-grad:linear-gradient(180deg,rgba(30,30,30,0.92),rgba(18,18,18,0.96));
+    --toast-bg:rgba(30,30,30,0.96);
+    --title-grad:linear-gradient(180deg,#fff,#c7c7c7);
+    /* the ambient background washes go neutral, or the whole page keeps a tint */
+    --glow-red:rgba(255,255,255,0.05); --glow-blue:rgba(255,255,255,0.035); --glow-purple:rgba(255,255,255,0.03);
+    --sh-fab:0 10px 30px rgba(0,0,0,0.55);
+  }
+  /* Mono accent pins --m-sec to a dark red at higher specificity, so it has to
+     be answered at higher specificity too or the muscle art stays tinted. */
+  :root[data-theme="gray"][data-accent="mono"], [data-theme="gray"][data-accent="mono"]{ --m-sec:#6f6f6f; }
+  /* Raster and JS-generated art can't be reached by variables: tier badges build
+     their gradients from STREAK_TIERS data, and exercise GIFs are photographs.
+     These are small, non-fixed elements, so a local filter is safe here — a
+     filter on a shared ancestor would create a containing block and break every
+     position:fixed child (FAB, sheet, toast, dev bar). */
+  /* Badge SVGs set an inline filter:drop-shadow, which beats a stylesheet rule,
+     so the wrapper is filtered instead of the <svg>. */
+  [data-theme="gray"] .skx-badge-wrap, [data-theme="gray"] .badge-prev,
+  [data-theme="gray"] #badgePrev, [data-theme="gray"] .skx-tok,
+  [data-theme="gray"] .demo-box img, [data-theme="gray"] .gif-slot img{ filter:grayscale(1); }
+  /* Emoji are emitted as bare text by sym() with no wrapper to hook, so the only
+     way to neutralise them is an ancestor filter. Safe here specifically because
+     every position:fixed element (FAB, sheet, toast, dev bar, sync chip) is
+     appended to <body>, not to #app — a filtered ancestor would otherwise become
+     their containing block and strand them mid-page. Verified at runtime. */
+  [data-theme="gray"] #app, [data-theme="gray"] .sheet-inner,
+  html[data-theme="gray"] #toast, html[data-theme="gray"] .dev-bar,
+  html[data-theme="gray"] .addbtn, html[data-theme="gray"] .sync-chip{ filter:grayscale(1); }
+
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
   html,body{background:var(--bg-0);color:var(--txt);font-family:var(--font);}
   #app{min-height:100dvh;position:relative;padding:0 0 120px;
@@ -124,13 +203,11 @@ if ('serviceWorker' in navigator) {
   .dchip{position:relative;border-radius:var(--r-md);background:var(--card);border:1px solid var(--stroke);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);padding:10px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;transition:transform .2s var(--spring),border-color .2s;opacity:0;transform:translateY(8px);animation:rise .4s var(--ease) forwards;}
   @keyframes rise{to{opacity:1;transform:none;}}
   @keyframes dayIn{to{opacity:1;transform:none;}}
-  /* training row: left type-stripe + grab affordance */
-  .trow{position:relative;overflow:hidden;touch-action:pan-y;}
+  /* training row: left type-stripe. Rows are not draggable — swapping days by
+     drag was removed because the gesture started anywhere on the row after 8px
+     of travel, so ordinary scrolling swapped two days by accident. */
+  .trow{position:relative;overflow:hidden;}
   .trow::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c,var(--txt-3));}
-  .trow:active{cursor:grabbing;}
-  .trow.dragging{opacity:.35;}
-  .trow.dragover{border-color:var(--red);background:rgba(255,69,58,0.08);}
-  .trow .thandle{flex:0 0 auto;color:var(--txt-3);font-size:15px;letter-spacing:1px;line-height:1;cursor:grab;opacity:.55;}
   /* exercise rows inside the day sheet get a tinted type edge */
   .exrow{position:relative;overflow:hidden;}
   .exrow::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--ec,var(--stroke-2));}
@@ -139,7 +216,7 @@ if ('serviceWorker' in navigator) {
   .demo-box img{width:100%;height:auto;max-height:230px;object-fit:contain;display:block;}
   .dchip:hover{border-color:var(--stroke-2);}
   @media (hover:hover) and (pointer:fine){.dchip:hover{transform:translateY(-2px);}}
-  .dchip.sel{border-color:var(--red);box-shadow:0 0 0 1px var(--red),0 8px 22px rgba(255,69,58,0.25);}
+  .dchip.sel{border-color:var(--red);box-shadow:0 0 0 1px var(--red),0 8px 22px var(--sel-glow);}
   .dchip .dow{font-size:9px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;font-weight:700;}
   .dchip .dnum{font-size:16px;font-weight:800;}
   .dchip .wtag{font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--c,var(--txt-3));}
@@ -212,10 +289,10 @@ if ('serviceWorker' in navigator) {
   .hyd-range{font-size:13px;font-weight:700;text-align:center;min-width:104px;}
   .hyd-chart{position:relative;display:flex;align-items:flex-end;gap:var(--hyd-gap,5px);height:118px;}
   .hyd-col{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;}
-  .hyd-bar{border-radius:3px 3px 2px 2px;background:linear-gradient(180deg,#5ac8fa,#0a84ff);transition:height .55s var(--ease);}
+  .hyd-bar{border-radius:3px 3px 2px 2px;background:linear-gradient(180deg,var(--water-1),var(--water-2));transition:height .55s var(--ease);}
   .hyd-bar.zero{background:var(--fill-track);height:2px;}
   .hyd-bar.gap{background:none;border-bottom:1px dashed var(--stroke-2);height:1px;}
-  .hyd-bar.today{box-shadow:0 0 0 1.5px var(--txt),0 0 10px rgba(90,200,250,.45);}
+  .hyd-bar.today{box-shadow:0 0 0 1.5px var(--txt),0 0 10px var(--sel-glow);}
   .hyd-goal{position:absolute;left:0;right:0;border-top:1px dashed var(--stroke-2);pointer-events:none;}
   /* label sits *under* the line — at full scale the line is flush with the top
      of the chart and an above-line label would collide with the range header. */
@@ -291,7 +368,7 @@ if ('serviceWorker' in navigator) {
      under the 3:1 needed for 16px bold. Whole gradient now clears it. */
   .cta.green{background:linear-gradient(180deg,#249a44,#1c7f37);box-shadow:0 8px 24px rgba(48,209,88,0.3);}
   .cta.undo{background:linear-gradient(180deg,#3a3a40,#2a2a2e);color:var(--txt-2);}
-  .cta.red{background:linear-gradient(180deg,#ff453a,#e0352b);box-shadow:0 8px 24px rgba(255,69,58,0.3);}
+  .cta.red{background:var(--cta-grad);box-shadow:var(--sh-cta);}
   .cta.ghost{background:var(--fill-3);color:var(--txt-2);border:1px solid var(--stroke);}
   .cta.sm{padding:11px;font-size:14px;margin-top:10px;}
 
@@ -500,7 +577,7 @@ if ('serviceWorker' in navigator) {
   .seq-btn:active{transform:scale(.95);}
   .seq-btn.next{background:linear-gradient(180deg,#fff,#d0d0d8);color:#000;}
   .seq-btn.skip{background:rgba(255,255,255,0.08);color:var(--txt-2);}
-  .seq-btn.end{background:rgba(255,69,58,0.15);color:var(--red);border:1px solid rgba(255,69,58,0.3);}
+  .seq-btn.end{background:var(--red-soft);color:var(--red);border:1px solid var(--red-line);}
   .seq-done-msg{font-size:18px;font-weight:700;color:var(--green);margin-bottom:8px;}
   .seq-done-sub{font-size:13px;color:var(--txt-2);}
   .seq-close{position:absolute;top:20px;right:20px;width:36px;height:36px;border-radius:50%;border:1px solid var(--stroke-2);background:rgba(255,255,255,0.06);color:var(--txt-2);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
@@ -563,7 +640,7 @@ if ('serviceWorker' in navigator) {
   .mg-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px;}
   .mg-chip{font-size:12px;font-weight:600;padding:6px 12px;border-radius:var(--r-pill);background:rgba(255,255,255,0.05);border:1px solid var(--stroke);color:var(--txt-2);cursor:pointer;transition:.2s;}
   .mg-chip:hover{border-color:var(--stroke-2);}
-  .mg-chip.primary{background:var(--red-soft);border-color:rgba(255,69,58,0.3);color:#ff8a82;}
+  .mg-chip.primary{background:var(--red-soft);border-color:var(--red-line);color:var(--red-ink);}
 
   .picker-item{display:flex;gap:12px;align-items:center;padding:11px 12px;border-radius:var(--r-md);border:1px solid var(--stroke);background:var(--card-2);margin-top:9px;cursor:pointer;transition:.2s;}
   .picker-item:hover{border-color:var(--red);background:rgba(52,52,58,0.55);}
@@ -685,7 +762,7 @@ if ('serviceWorker' in navigator) {
   .rot-chip{padding:6px 11px;border-radius:var(--r-pill);border:1px solid var(--stroke);background:var(--card);
     font:700 11px var(--font);color:var(--txt-3);cursor:pointer;transition:.15s;}
   .rot-chip:hover{border-color:var(--stroke-2);}
-  .rot-chip.core{background:rgba(255,69,58,0.14);border-color:rgba(255,69,58,0.5);color:#ff8a80;}
+  .rot-chip.core{background:var(--red-soft);border-color:var(--red-line);color:var(--red-ink);}
   .rot-chip.sec{background:rgba(255,159,10,0.14);border-color:rgba(255,159,10,0.45);color:var(--orange);}
 
   /* ===== DEV · UX switchboard ===== */
@@ -783,13 +860,22 @@ if ('serviceWorker' in navigator) {
   .prof-switch button{flex:1;border:none;background:transparent;color:var(--txt-3);font:700 13px var(--font);padding:9px;border-radius:var(--r-xs);cursor:pointer;transition:.2s;}
   .prof-switch button.on{background:var(--card);color:var(--txt);box-shadow:0 2px 8px rgba(0,0,0,0.2);}
   /* ===== dev mode — glass bar (image-4 language) ===== */
+  /* The bar used to lay out 9 icons at a fixed 46px and simply overflow the
+     viewport — on a 375pt phone it measured ~506px, so it was clipped on both
+     edges and the close button sat off-screen with no way to exit dev mode.
+     It is now capped to the viewport, the tools scroll, and close is pinned. */
   .dev-bar{position:fixed;left:50%;bottom:calc(100px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(30px);
-    display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:var(--r-xl);
+    display:flex;align-items:center;gap:4px;padding:7px 8px;border-radius:var(--r-xl);
+    max-width:calc(100vw - 16px);box-sizing:border-box;
     background:rgba(30,32,38,0.55);backdrop-filter:blur(24px) saturate(1.3);-webkit-backdrop-filter:blur(24px) saturate(1.3);
     border:1px solid rgba(255,255,255,0.14);box-shadow:0 12px 40px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.12);
     opacity:0;pointer-events:none;transition:opacity .3s var(--ease),transform .3s var(--spring);z-index:400;}
   .dev-bar.show{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0);}
-  .dev-ic{width:46px;height:46px;border:none;border-radius:var(--r-lg);background:transparent;color:rgba(255,255,255,0.82);
+  /* horizontal scroller for the tool icons; the close button lives outside it */
+  .dev-scroll{display:flex;align-items:center;gap:4px;overflow-x:auto;min-width:0;
+    scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-behavior:smooth;}
+  .dev-scroll::-webkit-scrollbar{display:none;}
+  .dev-ic{flex:0 0 auto;width:42px;height:42px;border:none;border-radius:var(--r-lg);background:transparent;color:rgba(255,255,255,0.82);
     display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.2s;}
   .dev-ic svg{width:22px;height:22px;}
   .dev-ic:hover{background:rgba(255,255,255,0.08);}
@@ -797,7 +883,10 @@ if ('serviceWorker' in navigator) {
   .dev-ic.dimmed{opacity:.32;cursor:not-allowed;}
   .dev-ic.dimmed:hover{background:transparent;}
   .dev-sep{width:1px;height:26px;background:rgba(255,255,255,0.14);margin:0 2px;}
-  .dev-close{color:rgba(255,120,120,0.9);}
+  /* Pinned outside .dev-scroll so exiting dev mode is always one tap away,
+     no matter how far the tool strip is scrolled. */
+  .dev-close{flex:0 0 auto;color:rgba(255,120,120,0.9);margin-left:2px;padding-left:6px;
+    border-left:1px solid rgba(255,255,255,0.14);border-radius:0 var(--r-lg) var(--r-lg) 0;}
 
   /* inline section controls when dev is on */
   .sec-editable{position:relative;outline:1px dashed rgba(255,255,255,0.18);outline-offset:4px;border-radius:var(--r-xs);transition:outline-color .2s;}
@@ -935,7 +1024,7 @@ if ('serviceWorker' in navigator) {
   .sync-stat .ss-sub{margin-left:auto;font:600 11px var(--font);color:var(--txt-3);}
   .sync-note{margin-top:10px;font-size:11.5px;line-height:1.5;border-radius:var(--r-sm);padding:9px 11px;word-break:break-word;}
   .sync-note.warn{color:var(--orange);background:rgba(255,159,10,0.09);border:1px solid rgba(255,159,10,0.28);}
-  .sync-note.bad{color:var(--red);background:var(--red-soft);border:1px solid rgba(255,69,58,0.3);}
+  .sync-note.bad{color:var(--red);background:var(--red-soft);border:1px solid var(--red-line);}
   .sync-cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;}
   .sync-side{background:var(--card);border:1px solid var(--stroke);border-radius:var(--r-sm);padding:11px;}
   .sync-side b{display:block;font-size:12.5px;color:var(--txt);}
@@ -1104,7 +1193,7 @@ function sym(key){
   }
   return SYM_DEFAULTS[key]||'';
 }
-const TYPE_COLOR={push:'var(--red)',pull:'var(--blue)',legs:'var(--purple)',core:'var(--orange)',cardio:'#ff375f',rest:'var(--txt-3)'};
+const TYPE_COLOR={push:'var(--red)',pull:'var(--blue)',legs:'var(--purple)',core:'var(--orange)',cardio:'var(--pink)',rest:'var(--txt-3)'};
 const WATER_TARGET=8; // glasses (~250ml each = 2L)
 const ACTIVITY_MULT={sedentary:1.2,light:1.375,moderate:1.55,active:1.725,athlete:1.9};
 
@@ -1304,10 +1393,16 @@ function load(){
   r=gget('meal_shopdismiss');SHOP_DISMISSED=r?JSON.parse(r.value):{};
   r=gget('meal_fridge');FRIDGE=r?JSON.parse(r.value):[];
   restoreCottageCheese();
+  /* Order matters. migrateToBaseUnits() rescales any amount that is still in
+     priced units, but migrateRecipeAmounts() writes amounts already in base
+     units (it parses "(450g)" straight out of the name). Running the parser
+     first meant every g/ml ingredient was then multiplied by unitSize a second
+     time — 450g became 45000g on every fresh install. Converting legacy data
+     first, then parsing, keeps each amount converted exactly once. */
+  migrateToBaseUnits();
   migrateRecipeAmounts();
   migrateProductsV3();
   migrateUnitsV4();
-  migrateToBaseUnits();
 }
 // v4 — restore human units (tbsp/tsp/cup) that earlier gram-conversion overwrote.
 // Re-parse each ingredient's original unit from the matching SEED recipe name.
@@ -1357,6 +1452,18 @@ function migrateRecipeAmounts(){
     });
     // now that amounts exist, create/link products
     syncRecipeProducts(r);
+    /* Rows whose name carries no quantity ("Mango yogurt (topping)") come out of
+       the parser with no amount. The old ordering gave them one as a side effect
+       of unitsToBase(p, amount||1) — one priced unit. That fallback was doing
+       real work, so it is restored explicitly here rather than lost: without it
+       the row renders with no amount and reads as though nothing was recorded. */
+    (r.ingredients||[]).forEach(ing=>{
+      if(!ing.productId || (+ing.amount||0)>0) return;
+      const p=prodById(ing.productId); if(!p) return;
+      const {unitSize,baseUnit}=prodBase(p);
+      ing.amount=unitSize; if(!ing.unit) ing.unit=baseUnit;
+      touched++;
+    });
   });
   if(touched){ saveRecipes(); }
   gset('meal_recipe_amounts_v2','1');
@@ -1384,7 +1491,15 @@ function migrateToBaseUnits(){
   saveFridge();savePlan();saveRecipes();
 }
 const saveProfile=()=>gset('meal_profile',JSON.stringify(PROFILE));
-function applyTheme(){ const t=(PROFILE.theme==='light')?'light':'dark'; const html=document.documentElement, app=document.getElementById('app'); if(t==='light'){ html.setAttribute('data-theme','light'); app&&app.setAttribute('data-theme','light'); } else { html.removeAttribute('data-theme'); app&&app.removeAttribute('data-theme'); } applyAccent(); }
+const THEMES=['dark','light','gray'];
+/* dark is the absence of the attribute, so only light/gray set it */
+function applyTheme(){
+  const t=THEMES.includes(PROFILE.theme)?PROFILE.theme:'dark';
+  const html=document.documentElement, app=document.getElementById('app');
+  if(t==='dark'){ html.removeAttribute('data-theme'); app&&app.removeAttribute('data-theme'); }
+  else { html.setAttribute('data-theme',t); app&&app.setAttribute('data-theme',t); }
+  applyAccent();
+}
 /* Muscle-art accent: 'orange' = two-hue (target red / assist orange), 'mono' = single-hue red family. */
 function applyAccent(){ const a=(PROFILE.accent==='orange')?'orange':'mono'; const html=document.documentElement, app=document.getElementById('app'); html.setAttribute('data-accent',a); app&&app.setAttribute('data-accent',a); }
 const saveRecipes=()=>gset('meal_recipes',JSON.stringify(RECIPES));
@@ -1829,9 +1944,48 @@ const saveLib      =()=>gset('aerte5_lib',JSON.stringify(LIB));
    than relying on this file's in-memory globals (RECIPES, PLAN, ...), since
    runMigrations() runs before those globals are populated. */
 const SCHEMA_KEY='aerte_schema';
-const SCHEMA_VERSION=1;
+const SCHEMA_VERSION=2;
 const MIGRATIONS=[
   function(){ /* v1 baseline — nothing to do yet */ },
+  /* v2 — repair recipe ingredient amounts inflated by the migration-ordering
+     fault above. Installs that booted the old order have every g/ml ingredient
+     multiplied by its product's unitSize.
+
+     Detection is arithmetic, not guesswork: an ingredient's kcal describes the
+     WHOLE line, while the linked product's kcal is per priced unit. So
+     product.kcal x (amount / unitSize) should reproduce the line's kcal. Where
+     that lands a factor of unitSize too high, the amount is inflated by exactly
+     that factor and is divided back down. Anything that doesn't match the
+     pattern within 2% is left untouched — a wrong repair is worse than none. */
+  function(){
+    const rr=gget('meal_recipes'), pr=gget('meal_products');
+    if(!rr||!pr) return;
+    let recipes, products;
+    try{ recipes=JSON.parse(rr.value); products=JSON.parse(pr.value); }catch(e){ return; }
+    if(!Array.isArray(recipes)||!Array.isArray(products)) return;
+    const byId={}; products.forEach(p=>{ if(p&&p.id) byId[p.id]=p; });
+    let fixed=0;
+    recipes.forEach(r=>{
+      (r&&r.ingredients||[]).forEach(ing=>{
+        const p=ing&&ing.productId?byId[ing.productId]:null; if(!p) return;
+        const us=+p.unitSize>0?+p.unitSize:1;
+        if(us<=1) return;                                  // pcs can't be inflated
+        const amt=+ing.amount||0, lineKcal=+ing.kcal||0, perUnit=+p.kcal||0;
+        if(amt<=0||lineKcal<=0||perUnit<=0) return;
+        /* Must convert through ingredientToBase, not divide by unitSize: a tbsp
+           or tsp line reaches base units via gramsPerUnit, so comparing raw
+           amounts misses every volume-unit ingredient (2 tbsp sugar inflated to
+           200 was left unrepaired by the naive form of this check). */
+        let baseNow;
+        try{ baseNow=ingredientToBase(ing).base; }catch(e){ baseNow=amt; }
+        if(!(baseNow>0)) return;
+        const implied=perUnit*(baseNow/us);
+        const ratio=implied/lineKcal;
+        if(Math.abs(ratio-us)/us<0.02){ ing.amount=+(amt/us).toFixed(4); fixed++; }
+      });
+    });
+    if(fixed){ gset('meal_recipes',JSON.stringify(recipes)); }
+  },
 ];
 function getSchema(){ const r=gget(SCHEMA_KEY); return r?(parseInt(r.value,10)||0):0; }
 function setSchema(v){ gset(SCHEMA_KEY,String(v)); }
@@ -1905,7 +2059,6 @@ function loadTraining(){
   LIB.forEach(ex=>{ if(!ex.gif){const s=SEED.find(x=>x.id===ex.id);if(s&&s.gif){ex.gif=s.gif;needsSave=true;}} });
   if(needsSave)saveLib();
 
-  runMigrations();
   r=gget('aerte5_wplan');    WPLAN=r?JSON.parse(r.value):{};
   r=gget('aerte5_wdone');    WDONE=r?JSON.parse(r.value):{};
   r=gget('aerte5_wnotes');   WNOTES=r?JSON.parse(r.value):{};
@@ -2410,15 +2563,15 @@ function renderSumCard(){
         <defs>
           <clipPath id="ringClip"><circle cx="35" cy="35" r="27"/></clipPath>
           <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#5ac8fa" stop-opacity="0.55"/>
-            <stop offset="100%" stop-color="#0a84ff" stop-opacity="0.85"/>
+            <stop offset="0%" stop-color="var(--water-1)" stop-opacity="0.55"/>
+            <stop offset="100%" stop-color="var(--water-2)" stop-opacity="0.85"/>
           </linearGradient>
         </defs>
         <g clip-path="url(#ringClip)">
           <rect x="0" y="${surfaceY}" width="70" height="70" fill="url(#waterGrad)" style="transition:y .7s var(--ease)"/>
           <g class="wwave" style="transform:translateY(${surfaceY}px)">
-            <path class="wwave-a" d="M-70 4 q 17.5 -6 35 0 t 35 0 t 35 0 t 35 0 V 70 H -70 Z" fill="#5ac8fa" opacity="0.5"/>
-            <path class="wwave-b" d="M-70 4 q 17.5 6 35 0 t 35 0 t 35 0 t 35 0 V 70 H -70 Z" fill="#0a84ff" opacity="0.45"/>
+            <path class="wwave-a" d="M-70 4 q 17.5 -6 35 0 t 35 0 t 35 0 t 35 0 V 70 H -70 Z" fill="var(--water-1)" opacity="0.5"/>
+            <path class="wwave-b" d="M-70 4 q 17.5 6 35 0 t 35 0 t 35 0 t 35 0 V 70 H -70 Z" fill="var(--water-2)" opacity="0.45"/>
           </g>
         </g>
         <circle cx="35" cy="35" r="30" fill="none" stroke="var(--ring-track)" stroke-width="6"/>
@@ -2565,16 +2718,32 @@ function closeSheet(){
 scrim.onclick=closeSheet;
 
 /* ===== unified item picker: recipes + products + supplements ===== */
-function openItemPicker(dayKey,slot){
-  let q='',cat='recipe';
+function openItemPicker(dayKey,slot,startCat){
+  let q='',cat=startCat||'recipe';
   const catBar=()=>`<div class="filt" style="margin-top:10px">
         <button class="${cat==='recipe'?'on':''}" data-cat="recipe">Recipes</button>
         <button class="${cat==='product'?'on':''}" data-cat="product">Products</button>
+        <button class="${cat==='fridge'?'on':''}" data-cat="fridge">Fridge</button>
         <button class="${cat==='supplement'?'on':''}" data-cat="supplement">Supplements</button>
         <button class="${cat==='mum'?'on':''}" data-cat="mum">Mum's cooking</button>
+        <button class="${cat==='snap'?'on':''}" data-cat="snap">📸 Snap</button>
       </div>`;
   const render=()=>{
     let html=`<h3>Add to ${slot==='snack'?'Snacks':cap(slot)}</h3>${catBar()}`;
+
+    if(cat==='snap'){
+      openSheet(html+snapPaneHTML());
+      sInner.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{cat=b.dataset.cat;render();});
+      const su=document.getElementById('snapSetup');
+      if(su) su.onclick=()=>openSnapSetup({dayKey,slot});
+      const st=document.getElementById('snapSettings');
+      if(st) st.onclick=()=>openSnapSetup({dayKey,slot});
+      ['snapCam','snapLib'].forEach(id=>{
+        const inp=document.getElementById(id);
+        if(inp) inp.onchange=e=>snapHandleFile(e.target.files&&e.target.files[0],{dayKey,slot});
+      });
+      return;
+    }
 
     if(cat==='mum'){
       html+=`<div class="field" style="margin-top:14px"><label>What was it</label><input id="mmName" placeholder="e.g. Mum's borscht"></div>
@@ -2594,16 +2763,48 @@ function openItemPicker(dayKey,slot){
       return;
     }
 
-    let pool = cat==='recipe'?RECIPES.map(r=>({ref:{type:'recipe',id:r.id},label:r.name,search:[r.name,r.dish,...(r.tags||[])].join(' ').toLowerCase(),meta:(()=>{const t=recipeTotals(r);const sv=r.servings||1;return `${Math.round(t.kcal/sv)} kcal/serving`;})()}))
+    /* Fridge lists real stock rather than the whole catalogue. Entries are
+       grouped by product so two half-packs of the same milk read as one line,
+       and only linked entries appear — a free-text fridge row has no macros to
+       log, so offering it here would add a 0 kcal item. */
+    let fridgeHidden=0;
+    if(cat==='fridge'){
+      const byProd={};
+      FRIDGE.forEach(f=>{
+        if(!f||!(+f.qty>0)) return;
+        if(!f.productId||!prodById(f.productId)){ fridgeHidden++; return; }
+        const e=byProd[f.productId]||(byProd[f.productId]={qty:0,exp:null});
+        e.qty+=+f.qty||0;
+        if(f.expires&&(!e.exp||f.expires<e.exp)) e.exp=f.expires;   // soonest expiry wins
+      });
+      var fridgePool=Object.keys(byProd).map(pid=>{
+        const p=prodById(pid), e=byProd[pid];
+        const days=e.exp?daysBetween(todayKey(),e.exp):null;
+        const expTxt=e.exp?(days<0?' · expired':(days===0?' · today':` · ${days}d left`)):'';
+        return {ref:{type:'product',id:pid},label:p.name,
+                search:`${p.name} ${p.unit||''}`.toLowerCase(),
+                meta:`${fmtBase(p,e.qty)} in stock${expTxt}`,
+                sort:(days==null?9999:days)};
+      }).sort((a,b)=>a.sort-b.sort);
+    }
+    let pool = cat==='fridge'?fridgePool
+      : cat==='recipe'?RECIPES.map(r=>({ref:{type:'recipe',id:r.id},label:r.name,search:[r.name,r.dish,...(r.tags||[])].join(' ').toLowerCase(),meta:(()=>{const t=recipeTotals(r);const sv=r.servings||1;return `${Math.round(t.kcal/sv)} kcal/serving`;})()}))
       : cat==='product'?PRODUCTS.map(p=>({ref:{type:'product',id:p.id},label:p.name,search:`${p.name} ${p.unit||''}`.toLowerCase(),meta:`${p.kcal} kcal / ${p.unit}`}))
       : SUPPLEMENTS.map(s=>({ref:{type:'supplement',id:s.id},label:s.name,search:`${s.name} ${s.brand||''}`.toLowerCase(),meta:`${s.kcal} kcal / ${s.serving}`}));
     pool=pool.filter(x=>x.search.includes(q));
+    if(cat==='product') html+=`<button class="cta ghost" id="pkScan" style="margin-top:12px">⌷ Scan a barcode</button>`;
     html+=`<div class="field" style="margin-top:6px"><input id="pkS" placeholder="Search name or tag…" value="${q}"></div><div id="pkList">`;
-    if(!pool.length)html+=`<div class="empty">${cat==='recipe'?'No recipes yet — add one from the Recipes tab.':'Nothing here yet.'}</div>`;
+    if(!pool.length)html+=`<div class="empty">${
+      cat==='recipe'?'No recipes yet — add one from the Recipes tab.'
+      :cat==='fridge'?(fridgeHidden?`Nothing in the fridge with nutrition data. ${fridgeHidden} item${fridgeHidden===1?'':'s'} hidden — link ${fridgeHidden===1?'it':'them'} to a product to log ${fridgeHidden===1?'it':'them'}.`:'Fridge is empty — tick things off your shopping list to stock it.')
+      :'Nothing here yet.'}</div>`;
+    else if(cat==='fridge'&&fridgeHidden) html+=`<div style="font-size:11px;color:var(--txt-3);margin:2px 2px 8px">${fridgeHidden} unlinked item${fridgeHidden===1?'':'s'} hidden — no nutrition data to log.</div>`;
     pool.forEach(x=>{html+=`<div class="picker-item" data-pickref='${JSON.stringify(x.ref)}'><div class="pi-nm">${x.label}<div class="pi-meta">${x.meta}</div></div></div>`;});
     html+=`</div><button class="cta ghost" id="pkBack">Cancel</button>`;
     openSheet(html);
     sInner.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{cat=b.dataset.cat;render();});
+    const sb=document.getElementById('pkScan');
+    if(sb) sb.onclick=()=>openBarcodeScanner({dayKey,slot});
     const si=document.getElementById('pkS');si.oninput=e=>{q=e.target.value.toLowerCase();const c=si.selectionStart;render();const ns=document.getElementById('pkS');ns.focus();ns.setSelectionRange(c,c);};
     sInner.querySelectorAll('[data-pickref]').forEach(it=>it.onclick=()=>{
       const ref=JSON.parse(it.dataset.pickref);
@@ -2884,6 +3085,223 @@ function openProductEditor(id,opts){
   const d=document.getElementById('qDel');if(d)d.onclick=async()=>{PRODUCTS=PRODUCTS.filter(x=>x.id!==id);await saveProducts();closeSheet();renderProdGrid();};
   document.getElementById('qCancel').onclick=opts.returnTo==='shopPicker'?openProductToShopPicker:closeSheet;
 }
+/* ============ SNAP — photograph food, Claude reads the macros ============
+   The barcode path covers anything with a label. Snap covers what doesn't have
+   one: a plate of Mum's cooking, loose bakery items, a handwritten menu.
+
+   The key is the user's own, entered on the device and stored in a key that is
+   deliberately NOT in ALL_STORE_KEYS — same reasoning as the sync PAT, so it is
+   never written into the gist blob or an export file. The repo is public; this
+   must never reach committed source. Requests go direct from the page, which
+   the API allows only with the anthropic-dangerous-direct-browser-access header
+   — without it the browser blocks the call at CORS before it is even sent. */
+const AI_CFG_KEY='aerte_ai_cfg';
+const AI_MODEL_DEFAULT='claude-opus-5';
+
+function aiCfg(){
+  try{ const r=gget(AI_CFG_KEY); return r?JSON.parse(r.value):{}; }catch(e){ return {}; }
+}
+function aiSaveCfg(c){ gset(AI_CFG_KEY,JSON.stringify(c)); }
+function aiReady(){ return !!(aiCfg().key||'').trim(); }
+
+/* iPhone photos are ~12MP; sending one raw is slow and costs several times more
+   tokens for no gain. 1568px on the long edge keeps label text legible while
+   staying inside the cheaper image tier. */
+function aiDownscale(file,maxEdge=1568){
+  return new Promise((res,rej)=>{
+    const img=new Image(), url=URL.createObjectURL(file);
+    img.onload=()=>{
+      const sc=Math.min(1,maxEdge/Math.max(img.width,img.height));
+      const cv=document.createElement('canvas');
+      cv.width=Math.round(img.width*sc); cv.height=Math.round(img.height*sc);
+      cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+      URL.revokeObjectURL(url);
+      const b64=cv.toDataURL('image/jpeg',0.82).split(',')[1];
+      res({b64,w:cv.width,h:cv.height});
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('Could not read that image')); };
+    img.src=url;
+  });
+}
+
+const AI_SCHEMA={
+  type:'object',
+  properties:{
+    name:{type:'string',description:'Short dish or product name, in English'},
+    basis:{type:'string',enum:['per_portion','per_100g'],
+      description:'per_100g only when reading a nutrition label that lists per-100g values; otherwise per_portion for the food actually shown'},
+    portion_g:{type:'number',description:'Estimated weight in grams of the portion shown; 0 if unknown'},
+    kcal:{type:'number'}, protein:{type:'number'}, carbs:{type:'number'}, fat:{type:'number'}, fiber:{type:'number'},
+    confidence:{type:'string',enum:['high','medium','low'],
+      description:'high only when reading printed values off a label'},
+    note:{type:'string',description:'One short sentence: what you identified and what you assumed'}
+  },
+  required:['name','basis','portion_g','kcal','protein','carbs','fat','fiber','confidence','note'],
+  additionalProperties:false
+};
+
+const AI_PROMPT=`Identify the food in this photo and give its nutrition.
+
+If a nutrition label is visible, read the printed values exactly and set confidence "high". Say whether they are per 100 g or per portion in "basis".
+If it is prepared food with no label, identify the dish, estimate the portion weight in grams from visible cues (plate size, cutlery, hand), and give macros for THAT portion with basis "per_portion". Set confidence "medium" or "low".
+If several foods are on the plate, give the combined total for everything visible.
+If you cannot tell what the food is, set name to "Unknown", confidence "low", and all numbers to 0.
+
+Be realistic rather than cautious: a plausible estimate is more useful than a refusal. Do not round to suspiciously neat numbers.`;
+
+async function aiAnalyse(b64){
+  const cfg=aiCfg();
+  const r=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{
+      'content-type':'application/json',
+      'x-api-key':(cfg.key||'').trim(),
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body:JSON.stringify({
+      model:cfg.model||AI_MODEL_DEFAULT,
+      max_tokens:1024,
+      output_config:{format:{type:'json_schema',schema:AI_SCHEMA}},
+      messages:[{role:'user',content:[
+        {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
+        {type:'text',text:AI_PROMPT}
+      ]}]
+    })
+  });
+  if(!r.ok){
+    let msg='';
+    try{ const j=await r.json(); msg=(j.error&&j.error.message)||''; }catch(e){}
+    if(r.status===401) throw new Error('That API key was rejected. Check it in Snap settings.');
+    if(r.status===429) throw new Error('Rate limited — wait a moment and try again.');
+    if(r.status===400&&/credit|balance/i.test(msg)) throw new Error('No API credit left. Top up in the Anthropic console.');
+    throw new Error(msg||('Request failed ('+r.status+')'));
+  }
+  const j=await r.json();
+  /* Safety classifiers can decline with a 200 and an empty content array, so
+     stop_reason has to be checked before indexing into content. */
+  if(j.stop_reason==='refusal') throw new Error('The model declined to answer for this image.');
+  const txt=(j.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+  if(!txt) throw new Error('Empty response from the model.');
+  let d; try{ d=JSON.parse(txt); }catch(e){ throw new Error('Could not read the model response.'); }
+  d._usage=j.usage||null; d._model=j.model||'';
+  return d;
+}
+
+function openSnapSetup(target){
+  const cfg=aiCfg();
+  openSheet(`<h3>Set up Snap</h3>
+    <div class="meta">Snap photographs food and fills in the macros. It uses your own Anthropic API key, stored only on this phone.</div>
+    <div class="field" style="margin-top:14px"><label>API key</label>
+      <input id="aiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-..." value="${esc(cfg.key||'')}"></div>
+    <div class="field"><label>Model</label>
+      <select id="aiModel">
+        <option value="claude-opus-5" ${(cfg.model||AI_MODEL_DEFAULT)==='claude-opus-5'?'selected':''}>Claude Opus 5 — most accurate (~3¢ / photo)</option>
+        <option value="claude-sonnet-5" ${cfg.model==='claude-sonnet-5'?'selected':''}>Claude Sonnet 5 — balanced (~2¢ / photo)</option>
+        <option value="claude-haiku-4-5" ${cfg.model==='claude-haiku-4-5'?'selected':''}>Claude Haiku 4.5 — cheapest (~0.6¢ / photo)</option>
+      </select></div>
+    <p style="font-size:11px;color:var(--txt-3);margin:10px 2px 0;line-height:1.55">
+      Get a key at <b>platform.claude.com/settings/keys</b> and load a few euros of credit. The key never leaves this device — it is excluded from cross-device sync and from export files. Reading a label is accurate; estimating a plate by eye is a guess, so check the numbers before saving.</p>
+    <button class="cta red" id="aiSave">Save</button>
+    ${cfg.key?'<button class="cta ghost" id="aiForget">Remove key from this device</button>':''}
+    <button class="cta ghost" id="aiCancel">Cancel</button>`);
+  document.getElementById('aiSave').onclick=()=>{
+    const k=document.getElementById('aiKey').value.trim();
+    if(!k){ toast('Paste your API key first'); return; }
+    aiSaveCfg({key:k,model:document.getElementById('aiModel').value});
+    toast('Snap is ready');
+    if(target) openSnapPane(target); else closeSheet();
+  };
+  const f=document.getElementById('aiForget');
+  if(f) f.onclick=()=>{ gdel(AI_CFG_KEY); toast('Key removed'); closeSheet(); };
+  document.getElementById('aiCancel').onclick=closeSheet;
+}
+
+/* Rendered inside the meal picker's Snap tab rather than as its own sheet, so
+   the category bar stays put and switching tabs behaves like the others. */
+function snapPaneHTML(){
+  if(!aiReady()){
+    return `<div class="scan-err" style="padding:26px 6px">Snap needs an Anthropic API key before it can read photos.<br><br>
+      Costs a fraction of a cent to a few cents per photo depending on the model you pick, and the key stays on this phone.</div>
+      <button class="cta red" id="snapSetup">Set up Snap</button>`;
+  }
+  return `<div style="margin-top:14px">
+      <label class="cta red" for="snapCam" style="text-align:center;cursor:pointer;display:block">Take a photo</label>
+      <input type="file" id="snapCam" accept="image/*" capture="environment" style="display:none">
+      <label class="cta ghost" for="snapLib" style="text-align:center;cursor:pointer;display:block">Choose from library</label>
+      <input type="file" id="snapLib" accept="image/*" style="display:none">
+      <p style="font-size:11px;color:var(--txt-3);margin:10px 2px 0;line-height:1.55">
+        Point at the nutrition label for exact numbers, or at the plate for an estimate. Always check before saving.</p>
+      <button class="cta ghost" id="snapSettings" style="margin-top:14px">Snap settings</button>
+    </div>`;
+}
+
+async function snapHandleFile(file,target){
+  if(!file) return;
+  openSheet(`<h3>Reading the photo…</h3><div class="scan-err" id="snapWait">Sending to Claude — this takes a few seconds.</div>`);
+  let d;
+  try{
+    const {b64}=await aiDownscale(file);
+    d=await aiAnalyse(b64);
+  }catch(e){
+    openSheet(`<h3>Snap failed</h3><div class="scan-err">${esc(e.message)}</div>
+      <button class="cta ghost" id="snEdit">Snap settings</button>
+      <button class="cta ghost" id="snCancel">Cancel</button>`);
+    document.getElementById('snEdit').onclick=()=>openSnapSetup(target);
+    document.getElementById('snCancel').onclick=closeSheet;
+    return;
+  }
+  showSnapResult(d,target);
+}
+
+function showSnapResult(d,target){
+  const conf={high:'read from a label',medium:'estimated',low:'rough guess'}[d.confidence]||'estimated';
+  const per100=d.basis==='per_100g';
+  const slotLabel=target.slot==='snack'?'Snacks':cap(target.slot);
+  openSheet(`<h3>${esc(d.name||'Unknown')}</h3>
+    <div class="meta">${esc(conf)}${d.portion_g>0?` · about ${Math.round(d.portion_g)} g`:''}${per100?' · values are per 100 g':''}</div>
+    ${d.note?`<p style="font-size:12px;color:var(--txt-2);margin:10px 2px 0;line-height:1.5">${esc(d.note)}</p>`:''}
+    <div class="field" style="margin-top:14px"><label>Name</label><input id="snName" value="${esc(d.name||'')}"></div>
+    <div class="field2"><div class="field" style="margin-top:0"><label>Kcal</label><input id="snKcal" type="number" value="${Math.round(+d.kcal||0)}"></div>
+      <div class="field" style="margin-top:0"><label>Protein g</label><input id="snP" type="number" step="0.1" value="${+d.protein||0}"></div></div>
+    <div class="field2"><div class="field" style="margin-top:0"><label>Carbs g</label><input id="snC" type="number" step="0.1" value="${+d.carbs||0}"></div>
+      <div class="field" style="margin-top:0"><label>Fat g</label><input id="snF" type="number" step="0.1" value="${+d.fat||0}"></div></div>
+    <div class="field"><label>Fiber g</label><input id="snFb" type="number" step="0.1" value="${+d.fiber||0}"></div>
+    ${per100&&d.portion_g>0?`<button class="cta ghost" id="snScale">Scale to the ${Math.round(d.portion_g)} g shown</button>`:''}
+    <p style="font-size:11px;color:var(--txt-3);margin:10px 2px 0;line-height:1.5">
+      ${d.confidence==='high'?'Read off the label — still worth a glance.':'An estimate, not a measurement. Correct anything that looks off before adding.'}</p>
+    <button class="cta red" id="snAdd">Add to ${slotLabel}</button>
+    <button class="cta ghost" id="snRetry">Try another photo</button>
+    <button class="cta ghost" id="snCancel">Cancel</button>`);
+
+  const sc=document.getElementById('snScale');
+  if(sc) sc.onclick=()=>{
+    /* Label values are per 100 g; the user wants what is on the plate. */
+    const f=(+d.portion_g||0)/100;
+    ['snKcal','snP','snC','snF','snFb'].forEach(id=>{
+      const el=document.getElementById(id);
+      el.value=id==='snKcal'?Math.round((+el.value||0)*f):+(((+el.value||0)*f).toFixed(1));
+    });
+    sc.remove(); toast('Scaled to portion');
+  };
+  document.getElementById('snAdd').onclick=()=>{
+    /* Stored as a 'mum' ref: free-form food carrying its own macros, exactly the
+       shape this already uses for home cooking. No new data type, no migration. */
+    const day=ensureDay(target.dayKey);
+    day[target.slot].push({type:'mum',
+      name:document.getElementById('snName').value.trim()||d.name||'Snapped food',
+      kcal:+document.getElementById('snKcal').value||0,
+      protein:+document.getElementById('snP').value||0,
+      carbs:+document.getElementById('snC').value||0,
+      fat:+document.getElementById('snF').value||0,
+      fiber:+document.getElementById('snFb').value||0});
+    savePlan(); closeSheet(); renderSumCard(); renderDaystrip(); renderDayDetail();
+    toast('Added to '+slotLabel);
+  };
+  document.getElementById('snRetry').onclick=()=>openItemPicker(target.dayKey,target.slot,'snap');
+  document.getElementById('snCancel').onclick=closeSheet;
+}
+
 /* ============ BARCODE SCANNER → OPEN FOOD FACTS ============
    Camera → zbar-wasm decodes the EAN/UPC on-device → Open Food Facts fills in
    the macros. No API key, no per-scan cost, and a cache hit works offline.
@@ -2947,7 +3365,11 @@ function offToProduct(o,code){
     /* price is the one thing OFF has no reliable data for — left at 0 so the
        cost tracking stays honest rather than silently wrong. */
     price:0,
-    defaultAmount: pkg>0?pkg:100,
+    /* defaultAmount is counted in PRICED units, not base units: the seed data
+       stores oats as defaultAmount:5 with unitSize:100, meaning 500 g. OFF
+       reports pack size in base units, so it has to be divided down or the
+       amount sheet opens at pack×100 (a 1 L milk offered as 100 000 ml). */
+    defaultAmount: pkg>0 ? +(pkg/100).toFixed(2) : 1,
     amountMode:'default',
     qtyLabel:qty, nutriscore:o.nutriscore_grade||''
   };
@@ -2962,7 +3384,13 @@ function stopScanner(){
   SCAN_BUSY=false;
 }
 
-function openBarcodeScanner(){
+/* When the scanner is opened from the meal picker it carries a destination, so
+   a hit can go straight into that slot instead of only into the library. The
+   target spans several sheets (camera → lookup → result), so it lives here
+   rather than being threaded through every call. */
+let SCAN_TARGET=null;
+function openBarcodeScanner(target){
+  SCAN_TARGET=target||null;
   openSheet(`<h3>Scan a barcode</h3>
     <div class="meta">Point at the barcode on the pack. Nutrition comes from Open Food Facts.</div>
     <div id="scanBody"></div>
@@ -3058,7 +3486,10 @@ async function onBarcode(code){
   /* Already in the library → open it for editing rather than making a twin.
      The app has a dedupe tool precisely because duplicates accumulate. */
   const known=PRODUCTS.find(p=>p.barcode===code);
-  if(known){ closeSheet(); toast('Already in your products'); openProductEditor(known.id); return; }
+  if(known){
+    if(SCAN_TARGET){ const t=SCAN_TARGET; SCAN_TARGET=null; return openProductAmount(t.dayKey,t.slot,known.id); }
+    closeSheet(); toast('Already in your products'); openProductEditor(known.id); return;
+  }
 
   openSheet(`<h3>Looking up…</h3><div class="meta scan-code">${esc(code)}</div>
     <div class="scan-err" id="lkBody">Checking Open Food Facts…</div>`);
@@ -3094,11 +3525,23 @@ function showScanHit(code,d){
     </div>
     <p style="font-size:11px;color:var(--txt-3);margin:10px 2px 0;line-height:1.5">
       Data from Open Food Facts. Check the numbers against the pack before saving — community data can be wrong or out of date. Price isn't included, so add yours on the next screen.</p>
-    <button class="cta red" id="shAdd">Add to products</button>
+    <button class="cta red" id="shAdd">${SCAN_TARGET?`Add to ${SCAN_TARGET.slot==='snack'?'Snacks':cap(SCAN_TARGET.slot)}`:'Add to products'}</button>
+    ${SCAN_TARGET?'<button class="cta ghost" id="shEdit">Edit before adding</button>':''}
     <button class="cta ghost" id="shRescan">Scan another</button>
     <button class="cta ghost" id="shCancel">Cancel</button>`);
-  document.getElementById('shAdd').onclick=()=>openProductEditor(null,{prefill:d});
-  document.getElementById('shRescan').onclick=openBarcodeScanner;
+  /* Scanning from a meal slot still saves the product to the library — the
+     point of scanning once is not having to scan it again next week. */
+  const commit=async(thenAmount)=>{
+    const t=SCAN_TARGET; SCAN_TARGET=null;
+    const np={...d,id:'p'+Date.now()+Math.random().toString(36).slice(2,5)};
+    PRODUCTS.push(np); await saveProducts(); renderProdGrid();
+    if(t&&thenAmount) openProductAmount(t.dayKey,t.slot,np.id);
+    else { closeSheet(); toast('Added to products'); }
+  };
+  document.getElementById('shAdd').onclick=()=>SCAN_TARGET?commit(true):openProductEditor(null,{prefill:d});
+  const se=document.getElementById('shEdit');
+  if(se) se.onclick=()=>{ SCAN_TARGET=null; openProductEditor(null,{prefill:d}); };
+  document.getElementById('shRescan').onclick=()=>openBarcodeScanner(SCAN_TARGET);
   document.getElementById('shCancel').onclick=closeSheet;
 }
 
@@ -3162,7 +3605,7 @@ function renderProdGrid(){
   /* Bind the toolbar before the empty-library return — an empty library is
      exactly when you want to scan your first item. */
   const dd0=document.getElementById('dedupeProdBtn'); if(dd0) dd0.onclick=openDedupeSheet;
-  const sc0=document.getElementById('scanProdBtn');   if(sc0) sc0.onclick=openBarcodeScanner;
+  const sc0=document.getElementById('scanProdBtn');   if(sc0) sc0.onclick=()=>openBarcodeScanner(null);
   if(!PRODUCTS.length){g.innerHTML=`<div class="empty" style="grid-column:1/-1">No products yet — scan a barcode to add one.</div>`;return;}
   g.innerHTML='';
   PRODUCTS.forEach((p,i)=>{const c=document.createElement('div');c.className='rcard';c.style.animationDelay=(i*0.03)+'s';
@@ -3808,6 +4251,7 @@ function renderProfileSettings(){
     <div class="field" style="margin-top:14px"><label>Appearance</label><div id="themeSeg" style="display:flex;gap:8px;margin-top:6px">
       <button type="button" data-theme-opt="dark" class="cta ghost" style="margin-top:0;flex:1">🌙 Dark</button>
       <button type="button" data-theme-opt="light" class="cta ghost" style="margin-top:0;flex:1">☀️ Light</button>
+      <button type="button" data-theme-opt="gray" class="cta ghost" style="margin-top:0;flex:1">◐ Grayscale</button>
     </div></div>
     <div class="totalsbar" id="profPreview"></div>
     <button class="cta red" id="saveProfile">Save profile</button>
@@ -3824,7 +4268,7 @@ function renderProfileSettings(){
   }
   ['pWeight','pHeight','pAge','pSex','pGoal'].forEach(id=>document.getElementById(id).addEventListener('input',updatePreview));
   updatePreview();
-  let pendTheme=(PROFILE.theme==='light')?'light':'dark';
+  let pendTheme=THEMES.includes(PROFILE.theme)?PROFILE.theme:'dark';
   function paintThemeSeg(){ document.querySelectorAll('#themeSeg [data-theme-opt]').forEach(b=>{ const on=b.dataset.themeOpt===pendTheme; b.style.background=on?'var(--red-soft)':'var(--fill-3)'; b.style.borderColor=on?'var(--red)':'var(--stroke)'; b.style.color=on?'var(--txt)':'var(--txt-2)'; }); }
   document.querySelectorAll('#themeSeg [data-theme-opt]').forEach(b=>b.onclick=()=>{ pendTheme=b.dataset.themeOpt; PROFILE.theme=pendTheme; applyTheme(); paintThemeSeg(); });
   paintThemeSeg();
@@ -4662,67 +5106,18 @@ function renderTrainWeek(){
     const bits=[`${p.exs.length} exercises`];
     if(w)bits.push('warmup ✓'); if(st)bits.push('stretch ✓');
     return `<div class="trow${done?' done':''}" data-tkey="${key}" style="--c:${TYPE_COLOR[p.type]}">
-      <span class="thandle">⠿</span><span class="tdot"></span>
+      <span class="tdot"></span>
       <div class="tinfo"><div class="tdate">${fmtDate(d)} · ${p.label}</div>
       <div class="tmeta">${bits.join(' · ')}</div></div>
       ${done?'<span class="tcheck">✓</span>':''}</div>`;
   }).join('');
   host.querySelectorAll('[data-tkey]').forEach(el=>{
-    attachRowDrag(el);
-    el.addEventListener('click',()=>{ if(!el._dragged) openDay(el.dataset.tkey); });
+    el.addEventListener('click',()=>openDay(el.dataset.tkey));
   });
   saveWPlan();
 }
 
 
-/* drag a training row onto another to swap the two days' plans */
-function attachRowDrag(el){
-  el.addEventListener('pointerdown',e=>{
-    if(e.button&&e.button!==0)return;
-    if(e.target.closest('button'))return;
-    el._dragged=false;
-    const sx=e.clientX,sy=e.clientY;
-    let ghost=null,started=false,target=null;
-    const move=ev=>{
-      const dx=ev.clientX-sx,dy=ev.clientY-sy;
-      if(!started&&Math.hypot(dx,dy)<8)return;
-      if(!started){
-        started=true;el._dragged=true;el.classList.add('dragging');
-        ghost=el.cloneNode(true);ghost.classList.remove('dragging');
-        Object.assign(ghost.style,{position:'fixed',zIndex:999,pointerEvents:'none',
-          width:el.offsetWidth+'px',height:el.offsetHeight+'px',opacity:'.92',
-          transform:'scale(1.03)',boxShadow:'0 18px 50px rgba(255,69,58,0.45)',
-          transition:'none',animation:'none',margin:0});
-        document.body.appendChild(ghost);
-      }
-      ghost.style.left=(ev.clientX-el.offsetWidth/2)+'px';
-      ghost.style.top=(ev.clientY-el.offsetHeight/2)+'px';
-      const under=document.elementFromPoint(ev.clientX,ev.clientY);
-      const row=under&&under.closest('.trow');
-      if(target&&target!==row)target.classList.remove('dragover');
-      if(row&&row!==el){row.classList.add('dragover');target=row;}else target=null;
-    };
-    const up=()=>{
-      document.removeEventListener('pointermove',move);
-      document.removeEventListener('pointerup',up);
-      if(ghost)ghost.remove();
-      el.classList.remove('dragging');
-      if(target){
-        const a=el.dataset.tkey,b=target.dataset.tkey;
-        const pa=JSON.parse(JSON.stringify(wplan(a))),pb=JSON.parse(JSON.stringify(wplan(b)));
-        WPLAN[a]=pb;WPLAN[b]=pa;
-        saveWPlan();target.classList.remove('dragover');
-        mQuiet(()=>{renderTrainWeek();renderDaystrip();renderDayDetail();});
-        const nb=document.querySelector(`.trow[data-tkey="${b}"]`);
-        if(nb&&nb.animate)nb.animate([{transform:'scale(1.04)'},{transform:'scale(1)'}],
-          {duration:380,easing:'cubic-bezier(.34,1.4,.5,1)'});
-      }
-      setTimeout(()=>el._dragged=false,50);
-    };
-    document.addEventListener('pointermove',move);
-    document.addEventListener('pointerup',up);
-  });
-}
 
 /* ============ DAY SHEET — training half ============ */
 function openDay(key){
@@ -5075,13 +5470,13 @@ function renderStats(hostId){
   w.keys.forEach(k=>{
     const t=!!WDONE[k],f=PLAN[k]&&dayTotals(k).kcal>0;
     let bg='var(--fill-2)';
-    if(t&&f)bg='var(--txt)';else if(t)bg='rgba(255,69,58,0.6)';else if(f)bg='rgba(10,132,255,0.5)';
+    if(t&&f)bg='var(--txt)';else if(t)bg='var(--heat-train)';else if(f)bg='var(--heat-log)';
     html+=`<div title="${k}" style="aspect-ratio:1;border-radius:4px;background:${bg}"></div>`;
   });
   html+=`</div><div class="legend" style="margin-top:10px">
     <span><i style="background:var(--txt)"></i>Both</span>
-    <span><i style="background:rgba(255,69,58,0.6)"></i>Trained</span>
-    <span><i style="background:rgba(10,132,255,0.5)"></i>Logged</span>
+    <span><i style="background:var(--heat-train)"></i>Trained</span>
+    <span><i style="background:var(--heat-log)"></i>Logged</span>
     <span><i style="background:var(--fill-2)"></i>Neither</span></div></div>`;
 
   // Workout type distribution
@@ -5415,13 +5810,11 @@ function ensureDevBar(){
   const bar=document.createElement('div');
   bar.id='devBar'; bar.className='dev-bar';
   bar.innerHTML=`
+    <div class="dev-scroll">
     <button class="dev-ic active" data-tool="layout" title="Layout — reorder & hide">
       <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="6" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="4" y="14" width="16" height="6" rx="1.5" stroke="currentColor" stroke-width="2"/></svg>
     </button>
-    <button class="dev-ic dimmed" data-tool="resize" title="Resize — coming soon" disabled>
-      <svg viewBox="0 0 24 24" fill="none"><path d="M10 4H5a1 1 0 0 0-1 1v5M14 20h5a1 1 0 0 0 1-1v-5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 15l6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-    </button>
-    <span class="dev-sep"></span>
+        <span class="dev-sep"></span>
     <button class="dev-ic" data-tool="rotation" title="Rotation — cycle days, core & secondary moves">
       <svg viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-2.34-5.66" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M20 4v4h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
@@ -5444,6 +5837,7 @@ function ensureDevBar(){
     <button class="dev-ic" data-tool="tools" title="Data tools">
       <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg>
     </button>
+    </div>
     <button class="dev-ic dev-close" data-tool="close" title="Exit dev mode">
       <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>`;
@@ -6674,6 +7068,7 @@ function devWipe(){
        EVERYTHING" should leave nothing behind — and like the sync keys it sits
        outside ALL_STORE_KEYS, so the loop above doesn't reach it. */
     gdel(OFF_CACHE_KEY);
+    gdel(AI_CFG_KEY);        // the Snap API key is a credential — never survive a wipe
   } finally { SYNC_APPLYING=false; }
   if(hadSync) toast('Wiped — sync disconnected too');
   setTimeout(()=>location.reload(),400);
@@ -7284,6 +7679,11 @@ document.getElementById('seqClose').onclick=()=>closeSeq(true);
 
 (function(){
   loadSync();          // first: everything below writes, and syncTouch reads this state
+  /* Ahead of load(): the ladder rewrites stored JSON directly, so it has to
+     finish before any loader parses that JSON into a global. Run afterwards and
+     a repair lands in storage but the session keeps the stale in-memory copy —
+     and the next save writes the broken data straight back over the fix. */
+  runMigrations();
   load();
   loadTraining();
   loadDevLayout();
@@ -7581,7 +7981,7 @@ document.getElementById('seqClose').onclick=()=>closeSeq(true);
   /* Sized to the chip exactly: border only, no spread ring — `0 0 0 1px` paints
      OUTSIDE the border box and made the outline a pixel proud on every edge. */
   .dsel{position:absolute;left:0;top:0;pointer-events:none;z-index:0;border-radius:16px;
-    border:1px solid var(--red);box-shadow:0 8px 22px rgba(255,69,58,0.25);
+    border:1px solid var(--red);box-shadow:0 8px 22px var(--sel-glow);
     transition:transform .3s var(--ease),width .3s var(--ease),height .3s var(--ease);}
   html.dsel-on .daystrip .dchip{z-index:1;}
   html.dsel-on .daystrip .dchip.sel{border-color:var(--stroke);box-shadow:none;}
