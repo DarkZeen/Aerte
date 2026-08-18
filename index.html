@@ -281,6 +281,131 @@ if ('serviceWorker' in navigator) {
   @keyframes flipIn{0%{transform:rotateX(90deg) scale(.8);}100%{transform:rotateX(0) scale(1);}}
 
   /* hydration chart — Profile → Progress */
+  /* ---- Health tab ----
+     Reads top to bottom as one answer then its evidence. Radii come from the
+     app's own --r-* scale, colour only from the theme's accent vars, so the
+     light theme remaps and the grayscale theme's filter on #app flattens the
+     whole tab with no special cases. Motion is one authored moment: bars and
+     meters grow from zero on render, and the app's global
+     prefers-reduced-motion rule turns that into a plain assignment. */
+  .gh-daynav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 2px 20px;}
+  .gh-daynav span{font-size:13px;font-weight:700;letter-spacing:-.01em;}
+  .gh-daynav button{width:30px;height:30px;flex:0 0 auto;border-radius:var(--r-pill);border:1px solid var(--stroke);
+    background:var(--card);color:var(--txt-2);font:700 14px var(--font);cursor:pointer;display:flex;
+    align-items:center;justify-content:center;transition:border-color .2s,color .2s;}
+  .gh-daynav button:not(:disabled):active{transform:scale(.94);}
+  .gh-daynav button:disabled{opacity:.28;}
+
+  /* The verdict sits on the page ground, not in a card: it is the page's
+     statement, and boxing it would rank it level with the evidence below. */
+  .gh-verdict{margin:0 2px 6px;}
+  .gh-vword{font:800 clamp(34px,10.5vw,44px)/1.04 var(--font);letter-spacing:-.035em;margin:0 0 5px;}
+  .gh-vscore{font:700 13px var(--font);margin:0 0 12px;font-variant-numeric:tabular-nums;}
+  .gh-vscore span{font-weight:600;color:var(--txt-3);}
+  .gh-vwhy{font-size:14.5px;line-height:1.5;color:var(--txt-2);margin:0 0 20px;max-width:34ch;}
+  .gh-ev{border-top:1px solid var(--stroke);}
+  .gh-evrow{display:flex;align-items:center;gap:11px;padding:12px 0;border-bottom:1px solid var(--stroke);}
+  .gh-evic{width:19px;height:19px;flex:0 0 auto;color:var(--txt-3);}
+  .gh-evic svg{width:100%;height:100%;display:block;}
+  .gh-evn{flex:1;min-width:0;font-size:13.5px;color:var(--txt-2);}
+  .gh-evv{font:700 14.5px var(--font);font-variant-numeric:tabular-nums;}
+  .gh-evd{width:52px;text-align:right;font-size:12px;font-weight:700;color:var(--txt-3);font-variant-numeric:tabular-nums;}
+  .gh-evd.up{color:var(--green);} .gh-evd.dn{color:var(--orange);}
+
+  .gh-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:26px 2px 10px;}
+  .gh-head h2{font:700 19px var(--font);letter-spacing:-.02em;margin:0;}
+  .gh-head span{font-size:12px;color:var(--txt-3);}
+  .gh-card{padding:16px 16px 18px;margin-bottom:0;}
+  .gh-note{font-size:11.5px;line-height:1.5;color:var(--txt-3);margin:12px 0 0;}
+  .gh-empty{font-size:13px;line-height:1.5;color:var(--txt-3);padding:14px 0;text-align:center;}
+
+  /* Figures as type on the card surface. Nested cards are never the answer. */
+  .gh-figs{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+  .gh-figs-3{grid-template-columns:repeat(3,1fr);}
+  .gh-figs-4{grid-template-columns:repeat(4,1fr);}
+  .gh-figs>div{min-width:0;}
+  .gh-fv{display:block;font:800 24px/1.1 var(--font);letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+  .gh-fu{font-size:13px;font-weight:600;color:var(--txt-3);letter-spacing:0;}
+  .gh-fl{display:block;font-size:11.5px;font-weight:600;color:var(--txt-3);margin-top:3px;}
+  .gh-figs-4 .gh-fv{font-size:20px;}
+
+  /* hypnogram */
+  .gh-hyp{display:flex;flex-direction:column;gap:8px;margin-top:18px;position:relative;}
+  /* Behind the blocks and non-interactive: the line is a hint about the path
+     between stages, never something to read a value off. */
+  .gh-links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:visible;}
+  .gh-links path{fill:none;stroke:var(--txt-3);stroke-width:1.25;opacity:.34;}
+  .gh-lane{position:relative;z-index:1;}
+  /* Name and duration sit together on the left rather than spanning the row. The
+     gap above each track is where the transition lines travel, and a right-aligned
+     duration put text directly under the busiest part of that path. */
+  .gh-lh{display:flex;justify-content:flex-start;align-items:baseline;gap:7px;font-size:11.5px;margin-bottom:4px;}
+  .gh-lh span{font-weight:700;} .gh-lh i{font-style:normal;color:var(--txt-3);font-variant-numeric:tabular-nums;}
+  .gh-track{position:relative;height:20px;border-radius:var(--r-xs);background:var(--fill-track);overflow:hidden;}
+  .gh-blk{position:absolute;top:0;bottom:0;border-radius:var(--r-xs);background:var(--c);min-width:2px;
+    transition:width .5s var(--ease);}
+  .gh-axis{display:flex;justify-content:space-between;margin-top:10px;font-size:11px;font-weight:600;
+    color:var(--txt-3);font-variant-numeric:tabular-nums;}
+
+  .gh-curve{min-height:104px;}
+
+  /* segmented control, matching the app's own .seg language at card scale */
+  .gh-seg{display:flex;gap:4px;background:var(--fill-2);border:1px solid var(--stroke);
+    border-radius:var(--r-sm);padding:3px;margin-bottom:16px;}
+  .gh-seg button{flex:1;border:0;background:transparent;color:var(--txt-2);font:600 12.5px var(--font);
+    padding:7px 4px;border-radius:var(--r-xs);cursor:pointer;transition:background .2s,color .2s;}
+  .gh-seg button.on{background:var(--seg-glider);color:var(--txt);box-shadow:var(--seg-glider-sh);}
+
+  .gh-meterrow{display:flex;align-items:baseline;gap:7px;margin-bottom:8px;}
+  .gh-mnum{font:800 28px/1 var(--font);letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+  .gh-mof{font-size:12.5px;color:var(--txt-3);font-weight:600;}
+  .gh-meter{height:6px;border-radius:var(--r-pill);background:var(--fill-track);overflow:hidden;}
+  .gh-meter span{display:block;height:100%;border-radius:var(--r-pill);
+    background:linear-gradient(90deg,var(--water-1),var(--water-2));transition:width .6s var(--ease);}
+
+  .gh-chart{display:flex;align-items:flex-end;gap:5px;height:80px;margin:18px 0 4px;}
+  .gh-bcol{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:6px;}
+  .gh-b{border-radius:var(--r-xs) var(--r-xs) 2px 2px;background:linear-gradient(180deg,var(--water-1),var(--water-2));
+    transition:height .55s var(--ease);}
+  /* Zero days keep the 2px track so an empty day reads as "nothing yet" instead
+     of as a chart that failed to draw. No inline height may override it. */
+  .gh-b.zero{background:var(--fill-track);height:2px;}
+  .gh-blab{font-size:10px;font-weight:700;color:var(--txt-3);text-align:center;}
+  .gh-chart-sm{height:64px;}
+  /* The day you are looking at, marked on the week so the big number above has
+     a place in the row rather than floating free of it. */
+  .gh-b.now{outline:1.5px solid var(--txt);outline-offset:1.5px;}
+  .gh-blab.now{color:var(--txt);}
+
+  /* Eight targets in a row at 375px, so each gets the full track height to stay
+     thumb-sized rather than shrinking to fit a label beside it. */
+  .gh-glasses{display:grid;grid-template-columns:repeat(8,1fr);gap:5px;margin-top:12px;}
+  .gh-glass{aspect-ratio:1;border:1px solid var(--stroke);background:var(--fill-2);border-radius:var(--r-sm);
+    color:var(--txt-3);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;
+    transition:background .2s,color .2s,border-color .2s,transform .12s;}
+  .gh-glass svg{width:17px;height:17px;}
+  .gh-glass.on{background:color-mix(in srgb,var(--water-1) 24%,transparent);
+    border-color:color-mix(in srgb,var(--water-1) 46%,transparent);color:var(--water-1);}
+  .gh-glass:active{transform:scale(.9);}
+  .gh-glass:focus-visible{outline:2px solid var(--water-1);outline-offset:2px;}
+
+  .gh-acts{display:flex;flex-direction:column;}
+  .gh-act{display:flex;gap:13px;align-items:center;padding:13px 0;}
+  .gh-act:first-child{padding-top:2px;}
+  .gh-act+.gh-act{border-top:1px solid var(--stroke);}
+  .gh-actic{width:38px;height:38px;flex:0 0 auto;border-radius:var(--r-pill);display:flex;align-items:center;
+    justify-content:center;color:var(--c);background:color-mix(in srgb,var(--c) 16%,transparent);}
+  .gh-actic svg{width:20px;height:20px;}
+  .gh-actx{flex:1;min-width:0;display:block;}
+  .gh-actn{display:block;font-weight:700;font-size:14.5px;letter-spacing:-.01em;}
+  .gh-tag{font-style:normal;font-weight:600;font-size:10.5px;color:var(--txt-3);margin-left:7px;}
+  .gh-actd{display:block;font-size:12px;color:var(--txt-3);margin-top:2px;line-height:1.45;}
+  .gh-actt{font-size:12px;color:var(--txt-3);flex:0 0 auto;font-variant-numeric:tabular-nums;}
+
+  @media (min-width:520px){
+    .gh-vword{font-size:46px;}
+    .gh-figs-4{gap:18px;}
+  }
   .hyd-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 2px 12px;}
   .hyd-nav{display:flex;align-items:center;gap:4px;}
   .hyd-nav button{width:28px;height:28px;flex:0 0 auto;border-radius:50%;border:1px solid var(--stroke);background:var(--card);color:var(--txt-2);font:700 13px var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.2s;}
@@ -1169,14 +1294,51 @@ const MEAL_SLOTS=[{k:'breakfast',label:'Breakfast',icon:'🌅'},{k:'lunch',label
 /* ============ SYMBOL REGISTRY (dev-mode UI overrides) ============
    Meaningful glyphs route through sym(key). A dev override (emoji / SVG / image)
    replaces the default everywhere that key renders. One definition, all instances. */
+/* ---- symbol set ----
+   These were emoji. Emoji render at a different weight, colour and optical size
+   on every platform, ignore the theme entirely, and turned to mud under the
+   grayscale theme's filter. They are now authored SVG in one geometry: 24 box,
+   1.75 stroke, round joins, currentColor.
+
+   Sized in em rather than px on purpose. Every existing call site already sets a
+   font-size to scale the old emoji text (26px on achievement tiles, inherited in
+   day rows), so an em-sized glyph inherits that same sizing and no call site
+   needed touching. currentColor means each one picks up whatever colour its
+   context already sets.
+
+   SYM_OVERRIDES still wins over all of it, and still accepts emoji, custom SVG
+   or an image, so nothing about the symbol editor changes. */
+const SYI='<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="display:inline-block;vertical-align:-.13em">';
 const SYM_DEFAULTS={
-  refresh:'↻',
-  meal_breakfast:'🌅', meal_lunch:'☀️', meal_dinner:'🌙', meal_snack:'🍎',
-  water:'💧', warmup:'🔥', stretch:'🧘', supplement:'💊', mum:'👩‍🍳',
-  ach_first:'🌱', ach_streak3:'🔥', ach_streak7:'⚡', ach_streak21:'💎',
-  ach_vol25:'🎯', ach_vol100:'🏋️', ach_warm10:'🔆', ach_stretch10:'🧘',
-  ach_legday:'🦵', ach_core5:'🎽', ach_log7:'📗', ach_log30:'📚',
-  ach_macro20:'🎚️', ach_protein20:'🥩', ach_hydrate10:'💧', ach_both:'🏆',
+  refresh:      SYI+'<path d="M20 11.5a8 8 0 1 1-2.6-5.4"/><path d="M20 4v4.4h-4.4"/></svg>',
+  /* meals read as a day arc: sunrise, high sun, moon, then an apple for snacks */
+  meal_breakfast:SYI+'<path d="M4 18h16"/><path d="M7.6 18a4.4 4.4 0 0 1 8.8 0"/><path d="M12 6.4v2.2M5.6 9.4l1.6 1.5M18.4 9.4l-1.6 1.5"/></svg>',
+  meal_lunch:   SYI+'<circle cx="12" cy="12" r="3.9"/><path d="M12 3.2v2.1M12 18.7v2.1M3.2 12h2.1M18.7 12h2.1M6 6l1.5 1.5M16.5 16.5 18 18M18 6l-1.5 1.5M7.5 16.5 6 18"/></svg>',
+  meal_dinner:  SYI+'<path d="M20 14.2A8 8 0 1 1 10.3 4a6.6 6.6 0 0 0 9.7 10.2Z"/></svg>',
+  meal_snack:   SYI+'<path d="M12 8.4c3.6-3 8 .6 6.2 5.2-1 2.6-3.4 5.6-6.2 5.6s-5.2-3-6.2-5.6C4 9 8.4 5.4 12 8.4Z"/><path d="M12 8.4V5.6a2.6 2.6 0 0 1 2.6-2.6"/></svg>',
+  water:        SYI+'<path d="M12 3.5c3.1 3.6 5 6.3 5 8.9A5 5 0 0 1 7 12.4c0-2.6 1.9-5.3 5-8.9Z"/></svg>',
+  warmup:       SYI+'<path d="M12 3c3 3.4 4.5 5.8 4.5 8.3A4.5 4.5 0 0 1 12 16a4.5 4.5 0 0 1-4.5-4.7C7.5 8.8 9 6.4 12 3Z"/><path d="M12 16v5"/></svg>',
+  stretch:      SYI+'<circle cx="12" cy="4.9" r="1.9"/><path d="M12 8v5"/><path d="M12 13 7.4 20M12 13l4.6 7"/><path d="M6.6 11h10.8"/></svg>',
+  supplement:   SYI+'<rect x="3" y="9" width="18" height="6" rx="3" transform="rotate(-35 12 12)"/><path d="M9.6 14.4 14.4 9.6"/></svg>',
+  mum:          SYI+'<path d="M4.6 19h14.8"/><path d="M6.4 19a5.6 5.6 0 0 1 11.2 0"/><circle cx="12" cy="6.6" r="2.4"/><path d="M8 4.4h8"/></svg>',
+
+  /* achievements, each drawn from what it actually rewards */
+  ach_first:    SYI+'<path d="M12 20v-6.4"/><path d="M12 13.6C12 9.6 9.2 7 5.6 7c0 4 2.6 6.6 6.4 6.6Z"/><path d="M12 13.6c0-4 2.8-6.6 6.4-6.6 0 4-2.6 6.6-6.4 6.6Z"/></svg>',
+  ach_streak3:  SYI+'<path d="M12 3c3 3.4 4.5 5.8 4.5 8.3A4.5 4.5 0 0 1 12 16a4.5 4.5 0 0 1-4.5-4.7C7.5 8.8 9 6.4 12 3Z"/><path d="M12 16v5"/></svg>',
+  ach_streak7:  SYI+'<path d="M13.5 3 6 13.4h4.7L9.8 21l7.7-10.6h-4.9L13.5 3Z"/></svg>',
+  ach_streak21: SYI+'<path d="M12 3.4 21 10l-9 10.6L3 10Z"/><path d="M7.4 10h9.2"/></svg>',
+  ach_vol25:    SYI+'<circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r="0.9"/></svg>',
+  ach_vol100:   SYI+'<path d="M3 9.4v5.2M6 7.6v8.8M18 7.6v8.8M21 9.4v5.2M6 12h12"/></svg>',
+  ach_warm10:   SYI+'<circle cx="12" cy="12" r="3.4"/><path d="M12 3.4v2.4M12 18.2v2.4M3.4 12h2.4M18.2 12h2.4M6.2 6.2 7.9 7.9M16.1 16.1l1.7 1.7M17.8 6.2 16.1 7.9M7.9 16.1 6.2 17.8"/></svg>',
+  ach_stretch10:SYI+'<circle cx="12" cy="4.9" r="1.9"/><path d="M12 8v5"/><path d="M12 13 7.4 20M12 13l4.6 7"/><path d="M6.6 11h10.8"/></svg>',
+  ach_legday:   SYI+'<path d="M9 3.4h5.2l-.6 6.2 2 5.4a3 3 0 0 1-5.6 2.2l-2.4-6a6 6 0 0 1 .2-4.4Z"/><path d="M9.4 20.6h5"/></svg>',
+  ach_core5:    SYI+'<path d="M7.6 3.4h8.8l-1 6.6a4 4 0 0 1-6.8 0Z"/><path d="M12 10v10.4"/><path d="M8.4 20.6h7.2"/></svg>',
+  ach_log7:     SYI+'<path d="M5.4 4.6h13v14.8h-13Z"/><path d="M8.6 8.6h6.8M8.6 12h6.8M8.6 15.4h4"/></svg>',
+  ach_log30:    SYI+'<path d="M4 5.4h5.4a2.6 2.6 0 0 1 2.6 2.6v11a2.2 2.2 0 0 0-2.2-2.2H4Z"/><path d="M20 5.4h-5.4A2.6 2.6 0 0 0 12 8v11a2.2 2.2 0 0 1 2.2-2.2H20Z"/></svg>',
+  ach_macro20:  SYI+'<path d="M5 7.4h14M5 12h14M5 16.6h14"/><circle cx="9.2" cy="7.4" r="1.9"/><circle cx="14.8" cy="12" r="1.9"/><circle cx="10.6" cy="16.6" r="1.9"/></svg>',
+  ach_protein20:SYI+'<path d="M4.4 13.6c0-4 3.4-7.2 7.6-7.2s7.6 2.4 7.6 5.6-2.6 5.6-6 5.6H8a3.6 3.6 0 0 1-3.6-4Z"/><circle cx="9" cy="12" r="1.1"/><circle cx="13.4" cy="13.6" r="1.1"/></svg>',
+  ach_hydrate10:SYI+'<path d="M12 3.5c3.1 3.6 5 6.3 5 8.9A5 5 0 0 1 7 12.4c0-2.6 1.9-5.3 5-8.9Z"/><path d="M9.6 12.8a2.5 2.5 0 0 0 2.4 2.6"/></svg>',
+  ach_both:     SYI+'<path d="M8 4h8v4.6a4 4 0 0 1-8 0Z"/><path d="M8 5.4H5.6v1.4a2.8 2.8 0 0 0 2.4 2.8"/><path d="M16 5.4h2.4v1.4a2.8 2.8 0 0 1-2.4 2.8"/><path d="M12 12.6v3.8"/><path d="M8.8 20h6.4l-.8-3.6H9.6Z"/></svg>',
 };
 const SYM_LABELS={
   meal_breakfast:'Breakfast', meal_lunch:'Lunch', meal_dinner:'Dinner', meal_snack:'Snacks',
@@ -2732,7 +2894,18 @@ function applyDayLayout(){
 /* ============ SHEET ============ */
 const scrim=document.getElementById('scrim'),sheet=document.getElementById('sheet'),sInner=document.getElementById('sheetInner');
 let SHEET_RETURN=null;
-function openSheet(html){SHEET_RETURN=null;sInner.innerHTML=`<div class="grabber"></div>`+html;scrim.classList.add('show');sheet.classList.add('show');}
+function openSheet(html){
+  SHEET_RETURN=null;
+  /* Always open from a clean transform. A drag-dismiss leaves an inline
+     translateY on the element until its slide-out finishes, and closeSheet()
+     runs SHEET_RETURN, which often opens the next sheet straight away. Without
+     this reset that returning sheet inherits the off-screen transform and sits
+     invisible until the pending timeout clears it. */
+  sheet.style.transform=''; sheet.style.transition=''; scrim.style.opacity='';
+  sInner.innerHTML=`<div class="grabber"></div>`+html;
+  scrim.classList.add('show');sheet.classList.add('show');
+  sheet.scrollTop=0;
+}
 function closeSheet(){
   const ret=SHEET_RETURN; SHEET_RETURN=null;
   /* Any exit from a sheet must release the camera — closing via the scrim, the
@@ -2747,6 +2920,103 @@ function closeSheet(){
 }
 scrim.onclick=closeSheet;
 
+/* ---- drag a sheet down to dismiss it ----
+   The grabber has been drawn at the top of every sheet from the start and
+   promised this gesture without doing anything, which is worse than not drawing
+   it at all. It works now, on every sheet, because it hangs off the shared
+   #sheet element rather than off any one caller.
+
+   The subtlety: .sheet IS the scroll container (overflow-y:auto), so a downward
+   drag is ambiguous. It means "scroll up through the content" almost always, and
+   "close me" only when there is nothing above to scroll to. Engaging on any
+   downward move would make a long sheet impossible to read. So the drag arms
+   only when the sheet already sits at scrollTop 0, or when the gesture starts on
+   the grabber, which is unambiguous at any scroll position. */
+(function(){
+  const CLOSE_PX=96;        // far enough that an abandoned scroll does not dismiss
+  const CLOSE_VEL=0.55;     // px/ms, so a short flick still closes
+  const HANDLE_BAND=44;     // top strip that behaves like the grabber
+  const SLIDE_MS=440;       // must outlast the .4s transform transition
+  const MIN_VEL_MS=24;      // shorter than this and a velocity reading is noise
+  let y0=0,x0=0,t0=0,dy=0,armed=false,dragging=false,fromHandle=false;
+
+  /* Text entry keeps its own drag behaviour: caret, selection, native pickers. */
+  const isTextish=el=>!!(el&&el.closest&&el.closest('input,textarea,select,[contenteditable]'));
+
+  sheet.addEventListener('touchstart',e=>{
+    if(e.touches.length!==1){ armed=false; return; }
+    const t=e.touches[0];
+    /* Bounded at both ends. "Within HANDLE_BAND of the top" written as a bare
+       `rel < BAND` is also true for every negative rel, i.e. any touch landing
+       above the sheet's top edge — which happens while the open transition is
+       still running and the element is still partly below the viewport. That
+       made fromHandle true for a touch anywhere in the body and bypassed the
+       scrollTop guard, so dragging inside a scrolled sheet dismissed it instead
+       of scrolling. */
+    const rel=t.clientY-sheet.getBoundingClientRect().top;
+    fromHandle=!!(e.target.closest&&e.target.closest('.grabber')) ||
+               (rel>=0&&rel<HANDLE_BAND);
+    if(isTextish(e.target)){ armed=false; return; }
+    if(!fromHandle&&sheet.scrollTop>0){ armed=false; return; }
+    armed=true; dragging=false; y0=t.clientY; x0=t.clientX; t0=e.timeStamp; dy=0;
+  },{passive:true});
+
+  sheet.addEventListener('touchmove',e=>{
+    if(!armed) return;
+    const t=e.touches[0], d=t.clientY-y0, dx=t.clientX-x0;
+    if(!dragging){
+      /* Wait for intent before committing. Upward means they are scrolling after
+         all; mostly-sideways belongs to whatever horizontal scroller is under
+         the finger. */
+      if(d<0||Math.abs(dx)>Math.abs(d)){ armed=false; return; }
+      if(d<6) return;
+      dragging=true;
+      sheet.style.transition='none';
+    }
+    dy=Math.max(0,d);
+    /* Take the gesture over, or the page and the sheet's own overscroll both
+       fight the transform. */
+    e.preventDefault();
+    sheet.style.transform='translateY('+dy.toFixed(1)+'px)';
+    scrim.style.opacity=String(Math.max(0,1-dy/420));
+  },{passive:false});
+
+  const release=e=>{
+    if(!armed) return;
+    const moved=dragging;
+    armed=false; dragging=false;
+    if(!moved){ sheet.style.transition=''; return; }
+    /* Velocity is only meaningful over a real interval. When moves arrive in the
+       same millisecond as the touchstart the elapsed time collapses toward zero
+       and dy/dt explodes, so a 40px nudge reads as a hard flick and dismisses.
+       Below MIN_VEL_MS, judge on distance alone. */
+    const dt=e.timeStamp-t0;
+    const vel=dt>=MIN_VEL_MS?dy/dt:0;
+    sheet.style.transition='';                        // hand the animation back to CSS
+    if(dy>CLOSE_PX||vel>CLOSE_VEL){
+      /* Carry on from where the finger left it. Clearing the inline transform
+         first would snap the sheet back to 0 for a frame before the class-driven
+         slide even began. */
+      sheet.style.transform='translateY(102%)';
+      scrim.style.opacity='0';
+      closeSheet();
+      setTimeout(()=>{ sheet.style.transform=''; scrim.style.opacity=''; },SLIDE_MS);
+    } else {
+      sheet.style.transform='';
+      scrim.style.opacity='';
+    }
+  };
+  sheet.addEventListener('touchend',release);
+  sheet.addEventListener('touchcancel',release);
+
+  /* Sheets had no keyboard exit at all, which the desk half of this app needs. */
+  document.addEventListener('keydown',e=>{
+    if(e.key!=='Escape') return;
+    if(!sheet.classList.contains('show')) return;
+    closeSheet();
+  });
+})();
+
 /* ===== unified item picker: recipes + products + supplements ===== */
 function openItemPicker(dayKey,slot,startCat){
   let q='',cat=startCat||'recipe';
@@ -2756,7 +3026,7 @@ function openItemPicker(dayKey,slot,startCat){
         <button class="${cat==='fridge'?'on':''}" data-cat="fridge">Fridge</button>
         <button class="${cat==='supplement'?'on':''}" data-cat="supplement">Supplements</button>
         <button class="${cat==='mum'?'on':''}" data-cat="mum">Mum's cooking</button>
-        <button class="${cat==='snap'?'on':''}" data-cat="snap">📸 Snap</button>
+        <button class="${cat==='snap'?'on':''}" data-cat="snap">${GH_ICON.camera} Snap</button>
       </div>`;
   const render=()=>{
     let html=`<h3>Add to ${slot==='snack'?'Snacks':cap(slot)}</h3>${catBar()}`;
@@ -3156,6 +3426,7 @@ const HEALTH_EXTRA={
   hrv    :[1,400,1],      // ms
   rhr    :[20,200,0],     // resting bpm
   vo2    :[5,100,1],
+  km     :[0.01,500,2],   // daily distance
   hrMin  :[20,220,0], hrAvg:[20,220,0], hrMax:[20,240,0],
   deep   :[1,1440,0], rem:[1,1440,0], light:[1,1440,0], awake:[0,1440,0],
 };
@@ -3184,6 +3455,13 @@ function healthRecord(entry){
      rather than merged: the API is the authority on what it recorded, and
      appending would duplicate every session on each re-pull. */
   if(Array.isArray(entry.acts)){ rec.acts=entry.acts; any=true; }
+  /* The night's shape, for the hypnogram: seg is [offsetMin, durMin, stageCode]
+     triples from lights-out, deliberately compact because it IS persisted —
+     ~30 segments a night is ~350 bytes, unlike the 1440 heart-rate samples that
+     are pointedly not stored. bed/wake are ISO so the axis can label real times. */
+  if(Array.isArray(entry.seg)&&entry.seg.length){ rec.seg=entry.seg; any=true; }
+  if(entry.bed){ rec.bed=entry.bed; any=true; }
+  if(entry.wake){ rec.wake=entry.wake; any=true; }
   if(!any) return false;
   rec.src=rec.src||'health';
   HEALTHLOG[key]=rec;
@@ -3511,7 +3789,7 @@ async function ghPull(daysBack,manual){
         filter:field+'.date >= "'+addDays(todayKey(),-daysBack)+'"', page_size:'400',
       }),tok).then(j=>j.dataPoints||[]));
 
-    const [steps,active,sleep,kcal,azm,hrv,rhr,vo2,acts]=await Promise.all([
+    const [steps,active,sleep,kcal,azm,dist,hrv,rhr,vo2,acts]=await Promise.all([
       ghRollup(tok,'steps',daysBack),
       soft('active minutes',ghRollup(tok,'active-minutes',daysBack)),
       soft('sleep',ghFetch('/users/me/dataTypes/sleep/dataPoints?'+new URLSearchParams({
@@ -3520,6 +3798,7 @@ async function ghPull(daysBack,manual){
       }),tok).then(j=>j.dataPoints||[])),
       soft('calories',ghRollup(tok,'total-calories',daysBack)),
       soft('zone minutes',ghRollup(tok,'active-zone-minutes',daysBack)),
+      soft('distance',ghRollup(tok,'distance',daysBack)),
       daily('daily-heart-rate-variability','daily_heart_rate_variability'),
       daily('daily-resting-heart-rate','daily_resting_heart_rate'),
       daily('daily-vo2-max','daily_vo2_max'),
@@ -3551,6 +3830,11 @@ async function ghPull(daysBack,manual){
         v=a.activeZoneMinutesRollupByHeartRateZone.reduce((s,z)=>s+(+z.minutesSum||0),0);
       put(ghKeyOf(p),'azm',v);
     });
+    /* Distances come back in millimetres, like every other length in this API. */
+    dist.forEach(p=>{
+      const d=p.distance||{};
+      put(ghKeyOf(p),'km',(+(d.distanceSum||d.millimetersSum||d.lengthSum||0))/1e6);
+    });
     const civil=o=>{ const c=o&&o.date; return c&&c.year
       ? c.year+'-'+String(c.month).padStart(2,'0')+'-'+String(c.day).padStart(2,'0') : null; };
     hrv.forEach(d=>{ const o=d.dailyHeartRateVariability||{};
@@ -3574,6 +3858,25 @@ async function ghPull(daysBack,manual){
         const f={DEEP:'deep',REM:'rem',LIGHT:'light',AWAKE:'awake'}[String(st.type||'').toUpperCase()];
         if(f) put(k,f,+(st.minutes||0));
       });
+      /* The per-stage segments are what a hypnogram actually needs; the summary
+         totals alone can only ever draw one flat bar. Offsets are minutes from
+         lights-out so the stored numbers stay small and timezone-free. */
+      if(k&&Array.isArray(s.stages)&&s.stages.length){
+        const t0=new Date(s.stages[0].startTime||iv.startTime||0).getTime();
+        const seg=[];
+        s.stages.forEach(st=>{
+          const a=new Date(st.startTime).getTime(), b=new Date(st.endTime).getTime();
+          const code={DEEP:0,LIGHT:1,REM:2,AWAKE:3}[String(st.type||'').toUpperCase()];
+          if(!isFinite(a)||!isFinite(b)||b<=a||code==null) return;
+          seg.push([Math.round((a-t0)/60000),Math.round((b-a)/60000),code]);
+        });
+        if(seg.length){
+          const r=(rows[k]=rows[k]||{date:k});
+          r.seg=seg;
+          r.bed=new Date(t0).toISOString();
+          r.wake=iv.endTime||new Date(t0+seg[seg.length-1][0]*60000+seg[seg.length-1][1]*60000).toISOString();
+        }
+      }
     });
 
     /* Detected workouts group by the day they started. Only the fields a card
@@ -3618,7 +3921,7 @@ async function ghPull(daysBack,manual){
     lost.length?'Pulled steps, but no '+lost.join(' or ')+'. Re-connect and tick every box on the consent screen.':'');
   if(n){
     try{ renderStats&&renderStats('statsBody'); renderProgressExtras&&renderProgressExtras(); }catch(e){}
-    try{ if(!document.getElementById('tab-health').classList.contains('hide')) renderHealth(); }catch(e){}
+    healthRepaint();
     if(manual) toast(n===1?'1 day from Google Health':n+' days from Google Health');
   } else if(manual) toast('Google Health had nothing new');
   return n;
@@ -3745,6 +4048,38 @@ function ghAutoPull(reason){
    from HEALTHLOG rows the Google Health pull filled in. Nothing here fetches on
    render except the intraday heart-rate curve, which is deliberate — see below. */
 
+/* ---- icon set ----
+   Authored rather than pulled from a library: Aerte has no build step and must
+   work offline, so an npm icon package isn't available. One geometry for all of
+   them (24 box, 1.75 stroke, round caps, currentColor, no fill) is what keeps
+   them reading as a set instead of clip art. Emoji were the previous stand-in
+   and they broke on every theme and platform. */
+const GHI_A='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+const GH_ICON={
+  heart:  GHI_A+'<path d="M12 20s-7-4.6-7-9.6A4.2 4.2 0 0 1 12 7.5a4.2 4.2 0 0 1 7 2.9c0 5-7 9.6-7 9.6Z"/></svg>',
+  pulse:  GHI_A+'<path d="M2 12h4l2.5-6 3 12L14.5 12H22"/></svg>',
+  moon:   GHI_A+'<path d="M20 14.2A8 8 0 1 1 10.3 4a6.6 6.6 0 0 0 9.7 10.2Z"/></svg>',
+  steps:  GHI_A+'<path d="M7 4c1.7 0 2.6 1.3 2.6 3 0 1.4-.5 2.3-.5 3.6 0 1 .4 1.6.4 2.6 0 1.4-1 2.2-2.5 2.2S4.5 14.6 4.5 13c0-1.2.4-1.8.4-2.9C4.9 8.6 4.4 7.7 4.4 6.4 4.4 5 5.3 4 7 4Z"/><path d="M16.8 8.2c1.7 0 2.6 1.3 2.6 3 0 1.4-.5 2.3-.5 3.6 0 1 .4 1.6.4 2.6 0 1.4-1 2.2-2.5 2.2s-2.5-.8-2.5-2.4c0-1.2.4-1.8.4-2.9 0-1.5-.5-2.4-.5-3.7 0-1.4.9-2.4 2.6-2.4Z"/></svg>',
+  flame:  GHI_A+'<path d="M12 3c3 3.4 4.5 5.8 4.5 8.3A4.5 4.5 0 0 1 12 16a4.5 4.5 0 0 1-4.5-4.7C7.5 8.8 9 6.4 12 3Z"/><path d="M12 16v5"/></svg>',
+  bolt:   GHI_A+'<path d="M13.5 3 6 13.4h4.7L9.8 21l7.7-10.6h-4.9L13.5 3Z"/></svg>',
+  gauge:  GHI_A+'<path d="M4.2 17a9 9 0 1 1 15.6 0"/><path d="M12 17l3.6-4.6"/></svg>',
+  run:    GHI_A+'<circle cx="14.4" cy="4.9" r="1.9"/><path d="M12.6 9.4 9.2 11l1.4 3.3-2 5.6"/><path d="M10.6 14.3l3.6 1.2 1.5 4.4"/><path d="M12.6 9.4l3.3.9 1.7 3"/><path d="M4.6 11.6h3"/></svg>',
+  walk:   GHI_A+'<circle cx="12.7" cy="4.7" r="1.9"/><path d="M11 9.2 8.9 12l1.7 2.6-1.4 5.6"/><path d="M10.6 14.6l3.4.6 1.3 4.9"/><path d="M11 9.2l3 1.2 1.2 3.4"/></svg>',
+  bike:   GHI_A+'<circle cx="5.6" cy="17" r="3"/><circle cx="18.4" cy="17" r="3"/><path d="M8.6 17h5l3-7.4"/><path d="M11.4 9.6h4.4"/><path d="M13.6 17l-2.2-7.4"/></svg>',
+  swim:   GHI_A+'<circle cx="17.6" cy="7.6" r="1.8"/><path d="M3 15.4c1.6-1.2 3-1.2 4.6 0s3 1.2 4.6 0 3-1.2 4.6 0 3 1.2 4.2.3"/><path d="M6.6 11.6l4.4-2.4 3.6 2"/></svg>',
+  weights:GHI_A+'<path d="M3 9.4v5.2M6 7.6v8.8M18 7.6v8.8M21 9.4v5.2M6 12h12"/></svg>',
+  yoga:   GHI_A+'<circle cx="12" cy="4.9" r="1.9"/><path d="M12 8v5"/><path d="M12 13 7.4 20M12 13l4.6 7"/><path d="M6.6 11h10.8"/></svg>',
+  spark:  GHI_A+'<path d="M12 4v4M12 16v4M4 12h4M16 12h4M6.7 6.7l2.8 2.8M14.5 14.5l2.8 2.8M17.3 6.7l-2.8 2.8M9.5 14.5l-2.8 2.8"/></svg>',
+  dot:    GHI_A+'<circle cx="12" cy="12" r="3.2"/></svg>',
+  drop:   GHI_A+'<path d="M12 3.5c3.1 3.6 5 6.3 5 8.9A5 5 0 0 1 7 12.4c0-2.6 1.9-5.3 5-8.9Z"/></svg>',
+  /* Used outside the Health tab (item picker, dev section controls). The set is
+     app-wide now, not health-specific, despite the name it grew up with. */
+  camera: GHI_A+'<path d="M3.4 8.6h3.2l1.4-2.2h8l1.4 2.2h3.2v9.8H3.4Z"/><circle cx="12" cy="13.4" r="3"/></svg>',
+  eye:    GHI_A+'<path d="M2.6 12S6 6.6 12 6.6 21.4 12 21.4 12 18 17.4 12 17.4 2.6 12 2.6 12Z"/><circle cx="12" cy="12" r="2.6"/></svg>',
+  eyeOff: GHI_A+'<path d="M4.2 9.2C3.1 10.4 2.6 12 2.6 12s3.4 5.4 9.4 5.4c1.3 0 2.4-.2 3.4-.6"/><path d="M9.6 6.9c.8-.2 1.6-.3 2.4-.3 6 0 9.4 5.4 9.4 5.4s-.8 1.3-2.2 2.6"/><path d="M4 4l16 16"/></svg>',
+  scale:  GHI_A+'<rect x="3.4" y="5.4" width="17.2" height="13.2" rx="3"/><path d="M12 9.2v2.4"/><path d="M8.6 15.2a3.4 3.4 0 0 1 6.8 0"/></svg>',
+};
+
 /* ---- readiness ----
    NOT a field the API returns. Fitbit's own Daily Readiness Score is a Premium
    feature and isn't exposed, so this is Aerte's own number and will not match
@@ -3831,7 +4166,6 @@ function readinessFor(key){
        when it's guessing rather than presenting a confident number. */
     depth:Math.min(hb.n,rb.n)};
 }
-const readyBand=s=>s>=65?{c:'var(--green)',l:'High'}:s>=30?{c:'var(--orange)',l:'Middle'}:{c:'var(--red)',l:'Low'};
 
 /* ---- intraday heart rate: fetched on demand, never stored ----
    One sample per minute is ~1440 points a day. Ninety days of that is roughly
@@ -3847,11 +4181,19 @@ async function ghHeartRate(key){
   if(!tok) return null;
   const out=[];
   let page='';
+  /* The filter wants instants, and the day we mean is the LOCAL one. Pasting
+     key+"T00:00:00Z" asks for the UTC day instead — at UTC+3 that silently drops
+     midnight to 3am and pulls in the previous evening. Derive the real bounds
+     from a local Date so the window matches the date on the card. */
+  const dayStart=dateOf(key); dayStart.setHours(0,0,0,0);
+  const dayEnd=new Date(dayStart.getTime()+86400000);
   do{
     const q=new URLSearchParams({
-      filter:'heart_rate.sample_time.physical_time >= "'+key+'T00:00:00Z" AND '+
-             'heart_rate.sample_time.physical_time < "'+addDays(key,1)+'T00:00:00Z"',
-      page_size:'10000',
+      filter:'heart_rate.sample_time.physical_time >= "'+dayStart.toISOString()+'" AND '+
+             'heart_rate.sample_time.physical_time < "'+dayEnd.toISOString()+'"',
+      /* 10000 is over the documented ceiling on some list endpoints and comes
+         back as INVALID_ARGUMENT rather than a clamp. Page smaller and loop. */
+      page_size:'1000',
     });
     if(page) q.set('page_token',page);
     const j=await ghFetch('/users/me/dataTypes/heart-rate/dataPoints?'+q,tok);
@@ -3862,7 +4204,10 @@ async function ghHeartRate(key){
     page=j.nextPageToken||'';
   }while(page);
   out.sort((a,b)=>a.t-b.t);
-  HR_CACHE.set(key,out);
+  /* Only cache a positive result. Caching an empty one means a day that failed
+     for a transient reason — mid-reauth, offline — can never be retried without
+     a reload, and it looks identical to a day the watch wasn't worn. */
+  if(out.length) HR_CACHE.set(key,out);
   /* The aggregate is cheap to keep and worth persisting — it survives the
      session and gives the week view something to draw without refetching. */
   if(out.length){
@@ -3893,8 +4238,8 @@ function renderHealth(){
   const key=healthDay();
 
   if(!ghOn()){
-    host.innerHTML=`<div class="sumcard" style="padding:18px">
-      <div class="hyd-empty" style="margin-bottom:14px">Connect Google Health to see readiness, sleep stages, heart rate and detected workouts from your Fitbit Air.</div>
+    host.innerHTML=`<div class="sumcard" style="padding:20px">
+      <div class="gh-empty" style="margin-bottom:16px">Connect Google Health and this page fills in with readiness, sleep stages, heart rate and the workouts your Air detected.</div>
       <button class="cta red" id="hvConnect" style="margin-top:0">Set up Google Health</button></div>`;
     document.getElementById('hvConnect').onclick=openGoogleHealth;
     return;
@@ -3902,10 +4247,13 @@ function renderHealth(){
 
   host.innerHTML=
     healthDayNavHTML(key)+
-    readyCardHTML(key)+
+    verdictHTML(key)+
+    stepsCardHTML(key)+
     sleepCardHTML(key)+
     hrCardHTML(key)+
     cardioCardHTML()+
+    waterCardHTML(key)+
+    weightCardHTML2()+
     actsCardHTML(key);
 
   host.querySelectorAll('[data-hday]').forEach(b=>b.onclick=()=>{
@@ -3914,6 +4262,26 @@ function renderHealth(){
   host.querySelectorAll('[data-hcard]').forEach(b=>b.onclick=()=>{
     HEALTH_CARDIO=b.dataset.hcard; renderHealth();
   });
+  /* Applied synchronously, not in requestAnimationFrame. The rAF callback was
+     never running here: something re-renders this host between the frame being
+     queued and it firing, so the callback landed on detached nodes. Every meter
+     stayed at width 0 and the connectors never drew at all. Reading
+     getBoundingClientRect right after innerHTML forces the layout the connectors
+     need anyway, so there is nothing to wait for. Later changes (day nav, period
+     toggle) still animate through the CSS transition, which is where the motion
+     was actually worth having. */
+  host.querySelectorAll('[data-fill]').forEach(f=>{ f.style.width=f.dataset.fill+'%'; });
+  paintHypLinks(key);
+  /* Tapping the glass you are already on clears back to it minus one, so the row
+     works as both "set to N" and "undo the last one". */
+  host.querySelectorAll('[data-water]').forEach(b=>b.onclick=()=>{
+    const want=+b.dataset.water, day=ensureDay(key);
+    day.water=(+day.water||0)===want?want-1:want;
+    savePlan(); renderHealth(); renderAll();
+  });
+  host.querySelectorAll('[data-wt2]').forEach(b=>b.onclick=()=>{ WT2_PERIOD=b.dataset.wt2; renderHealth(); });
+  const wt=document.getElementById('ghWt');
+  if(wt) wt.onclick=openWeightEntry;
   const rp=document.getElementById('hvRefresh');
   if(rp) rp.onclick=()=>{ ghPull(14,true).then(renderHealth).catch(()=>{}); };
   paintHrCurve(key);
@@ -3921,325 +4289,409 @@ function renderHealth(){
 
 function healthDayNavHTML(key){
   const isToday=key===todayKey();
-  return `<div class="hyd-head" style="margin-bottom:14px">
-    <div class="hyd-nav"><button data-hday="-1">‹</button></div>
-    <div class="hyd-range">${esc(isToday?'Today':fmtDateKey(key))}</div>
-    <div class="hyd-nav"><button data-hday="1" ${isToday?'disabled':''}>›</button></div>
+  return `<div class="gh-daynav">
+    <button data-hday="-1" aria-label="Previous day">‹</button>
+    <span>${esc(isToday?'Today':fmtDateKey(key))}</span>
+    <button data-hday="1" ${isToday?'disabled':''} aria-label="Next day">›</button>
   </div>`;
 }
 
-function readyCardHTML(key){
-  const r=readinessFor(key);
-  if(!r) return card('Readiness','Aerte’s own score',
-    `<div class="hyd-empty">No HRV or resting heart rate for this day yet.</div>`);
-  const b=readyBand(r.score);
-  const thin=r.depth<14;
-  return card('Readiness',thin?'baseline still forming':'vs your 30-day baseline',`
-    <div style="display:flex;align-items:center;gap:16px">
-      <div style="font:800 40px/1 var(--font);color:${b.c};min-width:74px">${r.score}</div>
-      <div style="flex:1">
-        <div style="font-weight:700;color:${b.c};margin-bottom:6px">${b.l}</div>
-        ${[['HRV',r.hrvScore,r.hrv?r.hrv.toFixed(0)+' ms':'—'],
-           ['Resting HR',r.rhrScore,r.rhr?r.rhr+' bpm':'—'],
-           ['Sleep',r.sleepScore,r.sleepScore?r.sleepScore+'/100':'—']]
-          .map(([n,sc,v])=>`<div style="display:flex;align-items:center;gap:8px;margin:3px 0">
-            <span style="font-size:11.5px;color:var(--txt-3);width:74px">${n}</span>
-            <span style="flex:1;height:4px;background:var(--fill-track);border-radius:2px;overflow:hidden">
-              <span style="display:block;height:100%;width:${Math.max(2,sc)}%;background:${readyBand(sc).c}"></span></span>
-            <span style="font-size:11.5px;font-weight:700;width:52px;text-align:right">${esc(v)}</span>
-          </div>`).join('')}
-      </div>
-    </div>
-    ${thin?`<p class="mm-note" style="margin-top:12px">Only ${r.depth} day${r.depth===1?'':'s'} of history behind the baseline, so treat this as provisional — it needs about a month to mean anything.</p>`:''}
-    <p class="mm-note">Aerte’s own formula (40% HRV · 30% resting HR · 30% sleep). It won’t match the Fitbit app’s Readiness score.</p>`);
+/* ---- the verdict ----
+   This page's job is answering "how is my body today" before anything is tapped,
+   so the answer goes first in words, and the numbers below it are the evidence
+   for that answer rather than five competing headlines. */
+function verdictWord(s){
+  if(s>=70) return {w:'Recovered', c:'var(--green)'};
+  if(s>=55) return {w:'Ready',     c:'var(--green)'};
+  if(s>=40) return {w:'Holding',   c:'var(--orange)'};
+  if(s>=25) return {w:'Run down',  c:'var(--orange)'};
+  return      {w:'Depleted',  c:'var(--red)'};
+}
+/* One sentence naming the two drivers that moved furthest from your own normal.
+   Each clause carries its polarity, because a score can read "Ready" on strong
+   sleep while resting heart rate is up: joining those with "and" produced a
+   green headline explained by bad news, which reads as a broken sentence. Same
+   polarity joins with "and", mixed joins with "though", so the sentence always
+   agrees with the word above it. */
+function verdictWhy(key,r){
+  const rec=HEALTHLOG[key]||{};
+  const hb=healthBaseline('hrv',key), rb=healthBaseline('rhr',key);
+  const bits=[];
+  if(r.hrv>0&&hb.avg>0){
+    const d=Math.round((r.hrv/hb.avg-1)*100);
+    if(Math.abs(d)>=4) bits.push({m:Math.abs(d),good:d>0,
+      t:'HRV is '+Math.abs(d)+'% '+(d>0?'above':'below')+' your usual'});
+  }
+  if(r.rhr>0&&rb.avg>0){
+    const d=Math.round((r.rhr/rb.avg-1)*100);
+    if(Math.abs(d)>=3) bits.push({m:Math.abs(d)*2,good:d<0,
+      t:'resting heart rate is '+Math.abs(d)+'% '+(d>0?'higher':'lower')+' than usual'});
+  }
+  const h=+rec.sleep||0;
+  if(h>0) bits.push({m:h>=7?6:14,good:h>=7,
+    t:(h>=7?'you slept ':'you only slept ')+fmtMin(h*60)});
+  if(!bits.length) return 'Not enough history yet to say why.';
+  bits.sort((a,b)=>b.m-a.m);
+  const top=bits.slice(0,2);
+  let out=top[0].t;
+  if(top[1]) out+=(top[0].good===top[1].good?' and ':', though ')+top[1].t;
+  return (out+'.').replace(/^./,c=>c.toUpperCase());
 }
 
+function verdictHTML(key){
+  const r=readinessFor(key);
+  if(!r) return `<section class="gh-verdict"><h2 class="gh-vword" style="color:var(--txt-2)">No reading yet</h2>
+    <p class="gh-vwhy">Nothing synced for this day yet. Your Air uploads when the Fitbit app next opens.</p></section>`;
+  const v=verdictWord(r.score);
+  const rec=HEALTHLOG[key]||{};
+  const hb=healthBaseline('hrv',key), rb=healthBaseline('rhr',key);
+  const dev=(val,base,invert)=>{
+    if(!(val>0)||!(base>0)) return null;
+    const d=Math.round((val/base-1)*100);
+    const good=invert?d<=0:d>=0;
+    return {d,good,txt:(d>0?'+':'')+d+'%'};
+  };
+  const rows=[
+    {i:'spark', n:'Heart rate variability', v:r.hrv?r.hrv.toFixed(0)+' ms':'-', d:dev(r.hrv,hb.avg,false)},
+    {i:'moon',  n:'Sleep',                  v:rec.sleep?fmtMin(rec.sleep*60):'-', d:null,
+     note:r.sleepScore?r.sleepScore+'/100':''},
+    {i:'heart', n:'Resting heart rate',     v:r.rhr?r.rhr+' bpm':'-', d:dev(r.rhr,rb.avg,true)},
+  ];
+  return `<section class="gh-verdict">
+    <h2 class="gh-vword">${v.w}</h2>
+    <p class="gh-vscore" style="color:${v.c}">${r.score}<span>/100 readiness</span></p>
+    <p class="gh-vwhy">${esc(verdictWhy(key,r))}</p>
+    <div class="gh-ev">
+      ${rows.map(x=>`<div class="gh-evrow">
+        <span class="gh-evic">${GH_ICON[x.i]}</span>
+        <span class="gh-evn">${esc(x.n)}</span>
+        <span class="gh-evv">${esc(x.v)}</span>
+        <span class="gh-evd${x.d?(x.d.good?' up':' dn'):''}">${x.d?esc(x.d.txt):(x.note?esc(x.note):'')}</span>
+      </div>`).join('')}
+    </div>
+    ${r.depth<14?`<p class="gh-note">Comparisons rest on ${r.depth} day${r.depth===1?'':'s'} of history so far. They sharpen after about a month.</p>`:''}
+  </section>`;
+}
+
+/* ---- steps ----
+   Was living in Profile as half of a "Steps and sleep" toggle. It belongs with
+   the rest of the day's body data, and the week of bars gives the single number
+   somewhere to sit. */
+const STEP_GOAL=10000;
+function stepsCardHTML(key){
+  const rec=HEALTHLOG[key]||{};
+  const n=+rec.steps||0, km=+rec.km||0;
+  if(!n&&!km) return card('Steps','',`<div class="gh-empty">Nothing counted for this day.</div>`);
+  const pct=Math.min(100,Math.round(n/STEP_GOAL*100));
+  const wk=periodKeys('week',0);
+  const mx=Math.max(1,...wk.map(k=>+(HEALTHLOG[k]||{}).steps||0));
+  const bars=wk.map(k=>{
+    const v=+(HEALTHLOG[k]||{}).steps||0;
+    const on=k===key;
+    return `<div class="gh-bcol"><div class="gh-b${v?'':' zero'}${on?' now':''}"${v?` style="height:${Math.max(5,v/mx*100)}%"`:''}
+      title="${esc(fmtDateKey(k))}: ${v?v.toLocaleString():'no'} steps"></div>
+      <span class="gh-blab${on?' now':''}">${esc(dateOf(k).toLocaleDateString(undefined,{weekday:'narrow'}))}</span></div>`;
+  }).join('');
+  return card('Steps','',`
+    <div class="gh-meterrow"><span class="gh-mnum">${n?n.toLocaleString():'0'}</span>
+      <span class="gh-mof">of ${STEP_GOAL.toLocaleString()}</span></div>
+    <div class="gh-meter"><span data-fill="${pct}" style="width:0"></span></div>
+    <div class="gh-chart gh-chart-sm">${bars}</div>
+    <div class="gh-figs gh-figs-3" style="margin-top:12px">
+      <div><span class="gh-fv">${km?km.toFixed(2):'-'}</span><span class="gh-fl">km walked</span></div>
+      <div><span class="gh-fv">${pct}<span class="gh-fu">%</span></span><span class="gh-fl">of goal</span></div>
+      <div><span class="gh-fv">${+rec.kcalOut?Math.round(rec.kcalOut).toLocaleString():'-'}</span><span class="gh-fl">kcal out</span></div>
+    </div>`);
+}
+
+/* ---- sleep ---- */
+/* Ordered so lightness descends with depth: awake is the lightest band, deep
+   the darkest. That ramp is what keeps the four lanes apart in the grayscale
+   theme, where --red and --water-2 collapse to within 0.017 relative luminance
+   of each other and two lanes stop being distinguishable. --blue and --water-2
+   are the same value in the colour themes, so Light is unchanged there and only
+   Awake shifts, from alarm red to orange, which suits waking better anyway. */
+const STAGE_ROWS=[{code:3,n:'Awake',c:'var(--orange)'},{code:2,n:'REM',c:'var(--water-1)'},
+                  {code:1,n:'Light',c:'var(--blue)'},{code:0,n:'Deep',c:'var(--purple)'}];
 function sleepCardHTML(key){
   const rec=HEALTHLOG[key]||{};
   const h=+rec.sleep||0;
-  const deep=+rec.deep||0, rem=+rec.rem||0, light=+rec.light||0, awake=+rec.awake||0;
-  if(!h&&!deep) return card('Sleep','',`<div class="hyd-empty">No sleep recorded for this night.</div>`);
-  const tot=deep+rem+light;
-  const seg=[['Deep',deep,'var(--blue)'],['REM',rem,'var(--purple,#a78bfa)'],
-             ['Light',light,'var(--water-1)'],['Awake',awake,'var(--fill-track)']];
-  const sc=sleepScore(rec);
-  return card('Sleep',h?h.toFixed(2).replace(/\.?0+$/,'')+' h asleep':'',`
-    ${tot>0?`<div style="display:flex;height:12px;border-radius:6px;overflow:hidden;margin-bottom:12px">
-      ${seg.filter(s=>s[1]>0).map(([n,v,c])=>`<span title="${n} ${fmtMin(v)}" style="width:${(v/(tot+awake)*100).toFixed(1)}%;background:${c}"></span>`).join('')}
-    </div>`:''}
-    <div class="hyd-stats">
-      ${seg.map(([n,v])=>`<div><b>${v>0?fmtMin(v):'—'}</b><i>${n.toLowerCase()}</i></div>`).join('')}
-    </div>
-    ${sc?`<div class="hyd-labs" style="margin-top:10px"><span>quality ${sc}/100</span><span>${tot>0?(deep/tot*100).toFixed(0)+'% deep · '+(rem/tot*100).toFixed(0)+'% REM':''}</span></div>`:''}`);
+  if(!h&&!(+rec.deep)) return card('Sleep','',`<div class="gh-empty">Nothing recorded for this night.</div>`);
+  const ss=sleepScore(rec), seg=Array.isArray(rec.seg)?rec.seg:null;
+  const quality=ss>=80?{t:'Good',c:'var(--green)'}:ss>=60?{t:'Fair',c:'var(--orange)'}:{t:'Poor',c:'var(--red)'};
+
+  /* Two figures side by side as plain type on the card's own surface. Boxing
+     them would put cards inside a card, which is never the right container. */
+  let body=`<div class="gh-figs">
+    <div><span class="gh-fv">${fmtMin(h*60)}</span><span class="gh-fl">asleep</span></div>
+    ${ss?`<div><span class="gh-fv">${ss}<span class="gh-fu">/100</span></span>
+      <span class="gh-fl" style="color:${quality.c}">${quality.t}</span></div>`:''}
+  </div>`;
+
+  if(seg&&seg.length){
+    const span=Math.max(1,...seg.map(x=>x[0]+x[1]));
+    body+=`<div class="gh-hyp" id="ghHyp" data-span="${span}">
+      <svg class="gh-links" aria-hidden="true"></svg>
+      ${STAGE_ROWS.map(st=>{
+      const mine=seg.filter(x=>x[2]===st.code);
+      const mins=mine.reduce((a,x)=>a+x[1],0);
+      return `<div class="gh-lane" data-code="${st.code}">
+        <div class="gh-lh"><span>${st.n}</span><i>${mins?fmtMin(mins):'0m'}</i></div>
+        <div class="gh-track" style="--c:${st.c}">${mine.map(x=>
+          `<span class="gh-blk" style="left:${(x[0]/span*100).toFixed(2)}%;width:${Math.max(0.6,x[1]/span*100).toFixed(2)}%"></span>`).join('')}</div>
+      </div>`;
+    }).join('')}</div>`;
+    const t=iso=>{ const d=new Date(iso); return isNaN(d)?'':d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); };
+    body+=`<div class="gh-axis"><span>${esc(t(rec.bed))}</span><span>${esc(t(rec.wake))}</span></div>`;
+  } else {
+    const tot=(+rec.deep||0)+(+rec.rem||0)+(+rec.light||0);
+    body+=`<div class="gh-hyp">${STAGE_ROWS.map(st=>{
+      const f={0:'deep',1:'light',2:'rem',3:'awake'}[st.code], v=+rec[f]||0;
+      return `<div class="gh-lane">
+        <div class="gh-lh"><span>${st.n}</span><i>${v?fmtMin(v):'0m'}</i></div>
+        <div class="gh-track" style="--c:${st.c}"><span class="gh-blk" data-fill="${tot?Math.min(100,v/(tot+(+rec.awake||0))*100).toFixed(1):0}" style="left:0;width:0"></span></div>
+      </div>`;}).join('')}</div>
+      <p class="gh-note">Stage timing arrives with the next pull; these are the night's totals.</p>`;
+  }
+  return card('Sleep','',body);
+}
+
+/* ---- stage transitions ----
+   One thin vertical line per stage change, threading the blocks together the way
+   the native chart does. Lane geometry is measured from the laid-out DOM rather
+   than recomputed from the CSS: label height moves with the user's text size, and
+   a hardcoded row pitch would drift the moment any of that changed. Drawn into an
+   overlay behind the blocks so a line never sits on top of a block it connects. */
+function paintHypLinks(key){
+  const host=document.getElementById('ghHyp'); if(!host) return;
+  const svg=host.querySelector('.gh-links'); if(!svg) return;
+  const seg=(HEALTHLOG[key]||{}).seg;
+  const span=+host.dataset.span||0;
+  if(!Array.isArray(seg)||seg.length<2||!(span>0)){ svg.innerHTML=''; return; }
+
+  const W=host.clientWidth, H=host.clientHeight;
+  if(!(W>0)||!(H>0)) return;
+  const hb=host.getBoundingClientRect();
+  const mid={};
+  host.querySelectorAll('.gh-lane').forEach(l=>{
+    const t=l.querySelector('.gh-track'); if(!t) return;
+    const r=t.getBoundingClientRect();
+    mid[+l.dataset.code]={top:r.top-hb.top, bot:r.bottom-hb.top};
+  });
+
+  /* Segments arrive in time order, so segment N's end is segment N+1's start and
+     one x serves both ends of the line. */
+  const parts=[];
+  for(let i=0;i<seg.length-1;i++){
+    const a=mid[seg[i][2]], b=mid[seg[i+1][2]];
+    if(!a||!b) continue;
+    const x=Math.min(W-0.5,Math.max(0.5,(seg[i][0]+seg[i][1])/span*W));
+    const down=b.top>a.top;
+    const y1=down?a.bot:a.top, y2=down?b.top:b.bot;
+    parts.push('M'+x.toFixed(1)+' '+y1.toFixed(1)+'V'+y2.toFixed(1));
+  }
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  svg.innerHTML=parts.length?'<path d="'+parts.join(' ')+'"/>':'';
 }
 
 function hrCardHTML(key){
   const rec=HEALTHLOG[key]||{};
   const rest=lastWith('rhr',key,7);
-  return card('Heart rate',rest?(rest.age?'resting from '+fmtDateKey(rest.key):'resting '+rest.v+' bpm'):'',`
-    <div id="hrCurve" style="min-height:96px"><div class="hyd-empty">Loading the day’s curve…</div></div>
-    <div class="hyd-stats" style="margin-top:10px">
-      <div><b>${+rec.hrMin||'—'}</b><i>min</i></div>
-      <div><b>${+rec.hrAvg||'—'}</b><i>avg</i></div>
-      <div><b>${+rec.hrMax||'—'}</b><i>max</i></div>
-      <div><b>${rest?rest.v:'—'}</b><i>resting</i></div>
+  return card('Heart rate','',`
+    <div id="hrCurve" class="gh-curve"><div class="gh-empty">Loading the day's curve</div></div>
+    <div class="gh-figs gh-figs-4">
+      ${[[+rec.hrMin||0,'low','hrLow'],[+rec.hrAvg||0,'average','hrAvg'],
+         [+rec.hrMax||0,'peak','hrMax'],[rest?rest.v:0,'resting','hrRest']]
+        .map(([v,l,id])=>`<div id="${id}"><span class="gh-fv">${v||'-'}</span><span class="gh-fl">${l}</span></div>`).join('')}
     </div>`);
 }
 
-/* The curve is the one thing on this tab that costs a network round trip, so it
-   fills in after the card is already on screen rather than holding it up. */
 async function paintHrCurve(key){
   const host=document.getElementById('hrCurve'); if(!host) return;
-  let pts=null;
-  try{ pts=await ghHeartRate(key); }catch(e){ pts=null; }
+  let pts=null,err=null;
+  try{ pts=await ghHeartRate(key); }catch(e){ err=e; }
   if(!document.getElementById('hrCurve')||healthDay()!==key) return;   // moved on while we waited
-  if(!pts||!pts.length){
-    host.innerHTML=`<div class="hyd-empty">No heart-rate samples for this day.</div>`; return;
+  if(err){
+    /* Naming the failure matters here: a 403 sent me looking at the watch when
+       the problem was the token. A scope added in the console after you last
+       consented is not in the sign-in you are holding. */
+    const m=String(err.message||err), scope=/\b40[13]\b/.test(m);
+    host.innerHTML=`<div class="gh-empty">${scope
+      ? 'Google refused heart rate. If you added the health metrics scope after connecting, your saved sign-in predates it.'
+      : esc(m)}</div>`+
+      (scope?`<button class="cta ghost" id="hrFix" style="margin-top:12px">Reconnect Google</button>`:'');
+    const b=document.getElementById('hrFix'); if(b) b.onclick=openGoogleHealth;
+    return;
   }
-  const W=Math.max(200,Math.round(host.clientWidth||320)), H=96, PADY=8;
+  if(!pts||!pts.length){ host.innerHTML=`<div class="gh-empty">No samples for this day.</div>`; return; }
+  const W=Math.max(200,Math.round(host.clientWidth||320)), H=104, PADY=10;
   const d0=dateOf(key).setHours(0,0,0,0), span=86400000;
   const bs=pts.map(p=>p.bpm), lo=Math.min(...bs), hi=Math.max(...bs);
   const y0=lo-4, y1=hi+4, ys=(y1-y0)||1;
   const xOf=t=>((t-d0)/span)*W, yOf=v=>PADY+(1-(v-y0)/ys)*(H-PADY*2);
-  /* A day of per-minute samples is more points than the width has pixels, so
-     bucket to roughly one per pixel — the shape is identical and the DOM is
-     three orders of magnitude smaller. */
-  const step=Math.max(1,Math.ceil(pts.length/W));
-  const thin=[]; for(let i=0;i<pts.length;i+=step){
+  /* More samples than the card has pixels, so bucket to about one per pixel:
+     same shape, three orders of magnitude fewer nodes. */
+  const step=Math.max(1,Math.ceil(pts.length/W)), thin=[];
+  for(let i=0;i<pts.length;i+=step){
     const win=pts.slice(i,i+step);
     thin.push({t:win[0].t,bpm:Math.round(win.reduce((s,p)=>s+p.bpm,0)/win.length)});
   }
-  const line=thin.map(p=>xOf(p.t).toFixed(1)+','+yOf(p.bpm).toFixed(1)).join(' ');
+  /* The min/avg/max are only known once the samples land, and the figures above
+     were rendered before that. Fill them in place rather than leaving a row of
+     dashes under a curve that plainly has the answer in it. */
+  const rec=HEALTHLOG[key]||{};
+  const cell=(sel,v)=>{ const el=document.querySelector(sel); if(el&&v>0) el.textContent=v; };
+  cell('#hrLow .gh-fv',+rec.hrMin); cell('#hrAvg .gh-fv',+rec.hrAvg); cell('#hrMax .gh-fv',+rec.hrMax);
+  const pl=thin.map(p=>xOf(p.t).toFixed(1)+','+yOf(p.bpm).toFixed(1)).join(' ');
+  const area=`${xOf(thin[0].t).toFixed(1)},${H} `+pl+` ${xOf(thin[thin.length-1].t).toFixed(1)},${H}`;
   const rest=+(HEALTHLOG[key]||{}).rhr||0;
-  host.innerHTML=`<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;overflow:visible">
+  host.innerHTML=`<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="display:block">
+    <defs><linearGradient id="hrg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="var(--red)" stop-opacity=".22"/>
+      <stop offset="1" stop-color="var(--red)" stop-opacity="0"/></linearGradient></defs>
     ${rest>0&&rest>y0&&rest<y1?`<line x1="0" y1="${yOf(rest).toFixed(1)}" x2="${W}" y2="${yOf(rest).toFixed(1)}"
-      stroke="var(--stroke)" stroke-dasharray="3 4"><title>resting ${rest} bpm</title></line>`:''}
-    <polyline points="${line}" fill="none" stroke="var(--red)" stroke-width="1.6"
-      stroke-linecap="round" stroke-linejoin="round"/>
+      stroke="var(--stroke-2)" stroke-dasharray="2 5"/>`:''}
+    <polygon points="${area}" fill="url(#hrg)"/>
+    <polyline points="${pl}" fill="none" stroke="var(--red)" stroke-width="1.5"
+      stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
   </svg>
-  <div class="hyd-labs"><span>00:00</span><span>12:00</span><span>24:00</span></div>`;
+  <div class="gh-axis"><span>00:00</span><span>12:00</span><span>24:00</span></div>`;
 }
 
 function cardioCardHTML(){
-  const keys=periodKeys(HEALTH_CARDIO==='week'?'week':'month',0);
+  const wk=HEALTH_CARDIO==='week';
+  const keys=periodKeys(wk?'week':'month',0);
   const azm=keys.reduce((s,k)=>s+(+(HEALTHLOG[k]||{}).azm||0),0);
   const kcal=keys.reduce((s,k)=>s+(+(HEALTHLOG[k]||{}).kcalOut||0),0);
   const act=keys.reduce((s,k)=>s+(+(HEALTHLOG[k]||{}).active||0),0);
-  const days=keys.filter(k=>(+(HEALTHLOG[k]||{}).azm||0)>0).length;
   const vo2=lastWith('vo2',todayKey(),30);
-  const goal=HEALTH_CARDIO==='week'?150:650;      // WHO's 150 active minutes a week
+  const goal=wk?160:680;
   const pct=Math.min(100,Math.round(azm/goal*100));
+  const mx=Math.max(1,...keys.map(x=>+(HEALTHLOG[x]||{}).azm||0));
+  /* A flat meter rather than a ring: the ring was decoration around a number,
+     and the per-day bars underneath already carry the shape of the week. */
   const bars=keys.map(k=>{
-    const v=+(HEALTHLOG[k]||{}).azm||0, mx=Math.max(1,...keys.map(x=>+(HEALTHLOG[x]||{}).azm||0));
-    /* An inline height on a zero bar would beat .hyd-bar.zero's 2px track and
-       collapse the day to nothing, which reads as a broken chart rather than as
-       "no data yet" — so zeros carry no inline height at all. */
-    return `<div class="hyd-col"><div class="hyd-bar ${v?'':'zero'}"${v?` style="height:${Math.max(4,v/mx*100)}%"`:''}
-      title="${esc(fmtDateKey(k))} · ${v||0} AZM"></div></div>`;
+    const v=+(HEALTHLOG[k]||{}).azm||0, lab=dateOf(k).toLocaleDateString(undefined,{weekday:'narrow'});
+    return `<div class="gh-bcol"><div class="gh-b${v?'':' zero'}"
+      style="${v?'height:'+Math.max(5,v/mx*100)+'%':''}" title="${esc(fmtDateKey(k))}: ${v||0} zone minutes"></div>
+      ${wk?`<span class="gh-blab">${esc(lab)}</span>`:''}</div>`;
   }).join('');
-  return card('Weekly cardio',HEALTH_CARDIO==='week'?'active zone minutes':'this month',`
-    <div class="filt" style="padding:0 0 12px;gap:6px">
-      ${[['week','Week'],['month','Month']].map(([v,l])=>
-        `<button data-hcard="${v}" class="${HEALTH_CARDIO===v?'on':''}">${l}</button>`).join('')}
-    </div>
-    <div class="hyd-chart" style="height:78px">${bars}</div>
-    <div class="hyd-labs" style="margin-top:8px"><span>${azm} AZM</span><span>${pct}% of ${goal}</span></div>
-    <div class="hyd-stats" style="margin-top:10px">
-      <div><b>${azm||'—'}</b><i>zone min</i></div>
-      <div><b>${act||'—'}</b><i>active min</i></div>
-      <div><b>${kcal?Math.round(kcal).toLocaleString():'—'}</b><i>kcal out</i></div>
-      <div><b>${vo2?vo2.v.toFixed(1):'—'}</b><i>VO₂ max</i></div>
-    </div>
-    ${days?'':`<p class="mm-note">No zone minutes in this ${HEALTH_CARDIO}.</p>`}`);
+  return card('Cardio','',`
+    <div class="gh-seg">${[['week','Week'],['month','Month']].map(([v,l])=>
+      `<button data-hcard="${v}" class="${HEALTH_CARDIO===v?'on':''}">${l}</button>`).join('')}</div>
+    <div class="gh-meterrow"><span class="gh-mnum">${azm}</span><span class="gh-mof">of ${goal} zone minutes</span></div>
+    <div class="gh-meter"><span data-fill="${pct}" style="width:0"></span></div>
+    <div class="gh-chart">${bars}</div>
+    <div class="gh-figs gh-figs-3">
+      <div><span class="gh-fv">${act||'-'}</span><span class="gh-fl">active min</span></div>
+      <div><span class="gh-fv">${kcal?Math.round(kcal).toLocaleString():'-'}</span><span class="gh-fl">kcal out</span></div>
+      <div><span class="gh-fv">${vo2?vo2.v.toFixed(1):'-'}</span><span class="gh-fl">VO₂ max</span></div>
+    </div>`);
 }
 
-const ACT_ICON={RUNNING:'\u{1F3C3}',WALKING:'\u{1F6B6}',BIKING:'\u{1F6B4}',SWIMMING:'\u{1F3CA}',
-  HIKING:'\u{1F97E}',YOGA:'\u{1F9D8}',PILATES:'\u{1F9D8}',HIIT:'⚡',WEIGHTLIFTING:'\u{1F3CB}',
-  STRENGTH_TRAINING:'\u{1F3CB}',WORKOUT:'\u{1F4AA}',OTHER:'•'};
+const ACT_ART={RUNNING:['run','var(--green)'],WALKING:['walk','var(--teal)'],BIKING:['bike','var(--blue)'],
+  SWIMMING:['swim','var(--water-1)'],HIKING:['walk','var(--green)'],YOGA:['yoga','var(--purple)'],
+  PILATES:['yoga','var(--purple)'],HIIT:['bolt','var(--orange)'],WEIGHTLIFTING:['weights','var(--purple)'],
+  STRENGTH_TRAINING:['weights','var(--purple)'],WORKOUT:['bolt','var(--orange)'],OTHER:['dot','var(--teal)']};
 function actsCardHTML(key){
   const acts=(HEALTHLOG[key]||{}).acts||[];
-  if(!acts.length) return card('Activities','detected',
-    `<div class="hyd-empty">No workouts detected on this day.</div>`);
-  return card('Activities',acts.length+' detected',
-    acts.map(a=>{
-      const t=a.at?new Date(a.at).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}):'';
-      const bits=[a.sec?fmtMin(a.sec/60):'',a.km?a.km+' km':'',a.kcal?a.kcal+' kcal':'',
-                  a.hr?a.hr+' bpm avg':'',a.azm?a.azm+' AZM':''].filter(Boolean);
-      return `<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--stroke)">
-        <span style="font-size:20px;line-height:1.2">${ACT_ICON[a.t]||ACT_ICON.OTHER}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:14px">${esc(a.n)}${a.man?' <span style="font-weight:500;font-size:11px;color:var(--txt-3)">manual</span>':''}</div>
-          <div style="font-size:11.5px;color:var(--txt-3);margin-top:2px">${esc(bits.join(' · '))}</div>
-        </div>
-        <span style="font-size:11.5px;color:var(--txt-3)">${esc(t)}</span>
-      </div>`;
-    }).join(''));
+  if(!acts.length) return card('Activity','',`<div class="gh-empty">Nothing detected on this day.</div>`);
+  return card('Activity','',`<div class="gh-acts">${acts.map(a=>{
+    const [ic,c]=ACT_ART[a.t]||ACT_ART.OTHER;
+    const t=a.at?new Date(a.at).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}):'';
+    const bits=[a.sec?fmtMin(a.sec/60):'',a.km?a.km+' km':'',a.kcal?a.kcal+' kcal':'',
+                a.hr?a.hr+' bpm':'',a.azm?a.azm+' AZM':''].filter(Boolean);
+    return `<div class="gh-act" style="--c:${c}">
+      <span class="gh-actic">${GH_ICON[ic]}</span>
+      <span class="gh-actx">
+        <span class="gh-actn">${esc(a.n)}${a.man?'<i class="gh-tag">logged by hand</i>':''}</span>
+        <span class="gh-actd">${esc(bits.join(' · '))}</span></span>
+      <span class="gh-actt">${esc(t)}</span></div>`;
+  }).join('')}</div>`);
 }
 
-/* Shared chrome so the five cards stay visually one family. */
+/* ---- hydration ----
+   Moved off Profile, and now tappable where it is shown: the glass row is the
+   control, not a read-out of one that lives elsewhere. Water is the only figure
+   on this tab you enter by hand, so it is the only one with a target you can hit
+   on the spot. */
+function waterCardHTML(key){
+  const d=PLAN[key], n=d?(+d.water||0):0;
+  const wk=periodKeys('week',0);
+  const avg=(()=>{
+    const live=wk.filter(k=>PLAN[k]).map(k=>+(PLAN[k].water)||0);
+    return live.length?live.reduce((a,b)=>a+b,0)/live.length:0;
+  })();
+  const glasses=Array.from({length:WATER_TARGET},(_,i)=>
+    `<button class="gh-glass${i<n?' on':''}" data-water="${i+1}" aria-label="${i+1} glass${i?'es':''}">
+      ${GH_ICON.drop}</button>`).join('');
+  return card('Water','',`
+    <div class="gh-meterrow"><span class="gh-mnum">${n}</span>
+      <span class="gh-mof">of ${WATER_TARGET} glasses${n>=WATER_TARGET?' · done':''}</span></div>
+    <div class="gh-glasses">${glasses}</div>
+    <div class="gh-figs gh-figs-3" style="margin-top:16px">
+      <div><span class="gh-fv">${(n*0.25).toFixed(2)}<span class="gh-fu">L</span></span><span class="gh-fl">today</span></div>
+      <div><span class="gh-fv">${avg?avg.toFixed(1):'-'}</span><span class="gh-fl">week average</span></div>
+      <div><span class="gh-fv">${wk.filter(k=>PLAN[k]&&(+PLAN[k].water||0)>=WATER_TARGET).length}</span><span class="gh-fl">days hit</span></div>
+    </div>`);
+}
+
+/* ---- weight ----
+   A line rather than bars: weight is continuous, and the question is the drift
+   over weeks, not any single morning's number. Drawn in real pixel space so the
+   dots stay round; a stretched viewBox turns every one into an ellipse. */
+let WT2_PERIOD='month';
+function weightCardHTML2(){
+  const keys=periodKeys(WT2_PERIOD,0);
+  const pts=keys.map(k=>({k,kg:+((HEALTHLOG[k]||{}).kg)||0})).filter(p=>p.kg>0);
+  const seg=`<div class="gh-seg">${[['week','Week'],['month','Month'],['year','Year']].map(([v,l])=>
+    `<button data-wt2="${v}" class="${WT2_PERIOD===v?'on':''}">${l}</button>`).join('')}</div>`;
+  if(!pts.length) return card('Weight','',seg+
+    `<div class="gh-empty">No weigh-ins this ${WT2_PERIOD}.</div>
+     <button class="cta ghost" id="ghWt" style="margin-top:4px">Log today's weight</button>`);
+  const lo=Math.min(...pts.map(p=>p.kg)), hi=Math.max(...pts.map(p=>p.kg));
+  const pad=Math.max(0.4,(hi-lo)*0.2), y0=lo-pad, y1=hi+pad, sp=(y1-y0)||1;
+  const W=320, H=118, PX=5, PY=12, last=Math.max(1,keys.length-1);
+  const xOf=k=>PX+(keys.indexOf(k)/last)*(W-PX*2);
+  const yOf=v=>PY+(1-(v-y0)/sp)*(H-PY*2);
+  const line=pts.map(p=>xOf(p.k).toFixed(1)+','+yOf(p.kg).toFixed(1)).join(' ');
+  const dots=pts.length<=24?pts:[pts[0],pts[pts.length-1]];
+  const delta=+(pts[pts.length-1].kg-pts[0].kg).toFixed(1);
+  const dc=delta===0?'var(--txt-3)':(delta<0?'var(--green)':'var(--orange)');
+  return card('Weight','',seg+`
+    <svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:${H}px;overflow:visible">
+      <line x1="${PX}" y1="${yOf(hi).toFixed(1)}" x2="${W-PX}" y2="${yOf(hi).toFixed(1)}" stroke="var(--stroke)" stroke-dasharray="3 4"/>
+      <line x1="${PX}" y1="${yOf(lo).toFixed(1)}" x2="${W-PX}" y2="${yOf(lo).toFixed(1)}" stroke="var(--stroke)" stroke-dasharray="3 4"/>
+      ${pts.length>1?`<polyline points="${line}" fill="none" stroke="var(--water-2)" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round"/>`:''}
+      ${dots.map(p=>`<circle cx="${xOf(p.k).toFixed(1)}" cy="${yOf(p.kg).toFixed(1)}" r="3.2"
+        fill="var(--card-2)" stroke="var(--water-2)" stroke-width="2"><title>${esc(fmtDateKey(p.k))}: ${p.kg} kg</title></circle>`).join('')}
+    </svg>
+    <div class="gh-figs gh-figs-3" style="margin-top:14px">
+      <div><span class="gh-fv">${pts[pts.length-1].kg.toFixed(1)}<span class="gh-fu">kg</span></span><span class="gh-fl">latest</span></div>
+      <div><span class="gh-fv" style="color:${dc}">${delta>0?'+':''}${delta}</span><span class="gh-fl">this ${WT2_PERIOD}</span></div>
+      <div><span class="gh-fv">${pts.length}</span><span class="gh-fl">weigh-ins</span></div>
+    </div>
+    <button class="cta ghost" id="ghWt" style="margin-top:14px">Log today's weight</button>`);
+}
+
+/* Repaint the Health tab only when it is the tab on screen. Callers that write
+   health data should not have to know whether it is visible, and rendering a
+   hidden tab measures zero-width elements, which is how the charts end up drawn
+   at the wrong scale. */
+function healthRepaint(){
+  try{
+    const t=document.getElementById('tab-health');
+    if(t&&!t.classList.contains('hide')) renderHealth();
+  }catch(e){}
+}
+
 function card(title,sub,body){
-  return `<div class="month-row" style="margin-top:20px"><h2>${esc(title)}</h2>${sub?`<span class="sub">${esc(sub)}</span>`:''}</div>
-    <div class="sumcard" style="padding:16px">${body}</div>`;
+  return `<div class="gh-head"><h2>${esc(title)}</h2>${sub?`<span>${esc(sub)}</span>`:''}</div>
+    <div class="sumcard gh-card">${body}</div>`;
 }
 
 /* ---- chart: weight is continuous, so a line rather than the water bars ---- */
-let WT_PERIOD='month', WT_OFF=0;
-function weightSeries(period,off){
-  return periodKeys(period,off).map(k=>({key:k,kg:(HEALTHLOG[k]&&+HEALTHLOG[k].kg)||null}))
-    .filter(p=>p.kg>0);
-}
-function renderWeightCard(){
-  const host=document.getElementById('wtBody'); if(!host) return;
-  const pts=weightSeries(WT_PERIOD,WT_OFF);
-  if(pts.length<1){
-    host.innerHTML=`<div class="hyd-empty">No weigh-ins in this ${WT_PERIOD}.</div>`; return;
-  }
-  /* Drawn in real pixel coordinates rather than a 0..100 box stretched with
-     preserveAspectRatio="none": that stretch scales x and y unequally, which
-     turns every dot into a fat ellipse and makes a year of readings an
-     unreadable blob. Width is measured, so the circles stay circular. */
-  const W=Math.max(200,Math.round(host.clientWidth||320)), H=120, PADX=6, PADY=10;
-  const kgs=pts.map(p=>p.kg);
-  const lo=Math.min(...kgs), hi=Math.max(...kgs);
-  const pad=Math.max(0.4,(hi-lo)*0.18), y0=lo-pad, y1=hi+pad, span=(y1-y0)||1;
-  const keys=periodKeys(WT_PERIOD,WT_OFF), lastIdx=Math.max(1,keys.length-1);
-  const xOf=k=>PADX+(keys.indexOf(k)/lastIdx)*(W-PADX*2);
-  const yOf=v=>PADY+(1-(v-y0)/span)*(H-PADY*2);
-  const line=pts.map(p=>`${xOf(p.key).toFixed(1)},${yOf(p.kg).toFixed(1)}`).join(' ');
-  /* A year can hold 100+ readings; past ~24 the dots merge into the line and
-     only the endpoints stay useful. */
-  const dots=pts.length<=24?pts:[pts[0],pts[pts.length-1]];
-  const first=pts[0].kg, last=pts[pts.length-1].kg, delta=+(last-first).toFixed(1);
-  const dCol=delta===0?'var(--txt-3)':(delta<0?'var(--green)':'var(--orange)');
-  host.innerHTML=`
-    <svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;overflow:visible">
-      <line x1="${PADX}" y1="${yOf(hi).toFixed(1)}" x2="${W-PADX}" y2="${yOf(hi).toFixed(1)}"
-        stroke="var(--stroke)" stroke-dasharray="3 4"/>
-      <line x1="${PADX}" y1="${yOf(lo).toFixed(1)}" x2="${W-PADX}" y2="${yOf(lo).toFixed(1)}"
-        stroke="var(--stroke)" stroke-dasharray="3 4"/>
-      ${pts.length>1?`<polyline points="${line}" fill="none" stroke="var(--blue)" stroke-width="2"
-        stroke-linecap="round" stroke-linejoin="round"/>`:''}
-      ${dots.map(p=>`<circle cx="${xOf(p.key).toFixed(1)}" cy="${yOf(p.kg).toFixed(1)}" r="3.2"
-        fill="var(--bg-1)" stroke="var(--blue)" stroke-width="2"
-        ><title>${esc(fmtDateKey(p.key))} · ${p.kg} kg</title></circle>`).join('')}
-    </svg>
-    <div class="hyd-labs" style="margin-top:8px"><span>${lo.toFixed(1)} kg low</span><span>${hi.toFixed(1)} kg high</span></div>
-    <div class="hyd-stats">
-      <div><b>${last.toFixed(1)}</b><i>latest kg</i></div>
-      <div><b style="color:${dCol}">${delta>0?'+':''}${delta}</b><i>change</i></div>
-      <div><b>${pts.length}</b><i>weigh-ins</i></div>
-    </div>`;
-}
-/* ---- steps & sleep: same bar chart language as hydration ---- */
-let ACT_PERIOD='week', ACT_OFF=0, ACT_METRIC='steps';
-const ACT_META={
-  steps:{label:'Steps', goal:8000,  fmt:v=>Math.round(v).toLocaleString(), unit:'',  avg:'avg steps'},
-  sleep:{label:'Sleep', goal:8,     fmt:v=>(+v).toFixed(1),                unit:'h', avg:'avg hours'}
-};
-function renderActivity(){
-  const host=document.getElementById('actBody'); if(!host) return;
-  const m=ACT_META[ACT_METRIC], keys=periodKeys(ACT_PERIOD,ACT_OFF);
-  let bars;
-  if(ACT_PERIOD==='year'){
-    const by={};
-    keys.forEach(k=>{ const v=HEALTHLOG[k]&&+HEALTHLOG[k][ACT_METRIC]; if(v>0)(by[+k.slice(5,7)-1]=by[+k.slice(5,7)-1]||[]).push(v); });
-    bars=Array.from({length:12},(_,i)=>{
-      const a=by[i]||[]; const avg=a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
-      return {v:avg,on:a.length>0,lab:'JFMAMJJASOND'[i],hi:false,
-              tip:`${new Date(2000,i,1).toLocaleDateString(undefined,{month:'long'})} · ${a.length?m.fmt(avg)+m.unit+' avg':'no data'}`};
-    });
-  } else {
-    const wk=['M','T','W','T','F','S','S'];
-    bars=keys.map((k,i)=>{
-      const v=(HEALTHLOG[k]&&+HEALTHLOG[k][ACT_METRIC])||0, d=dateOf(k), dn=d.getDate();
-      const lab=ACT_PERIOD==='week'?wk[i]:((i===0||dn%5===0)?String(dn):'');
-      return {v,on:v>0,lab,hi:k===todayKey(),tip:`${fmtDateKey(k)} · ${v>0?m.fmt(v)+m.unit:'no data'}`};
-    });
-  }
-  const live=bars.filter(b=>b.on);
-  if(!live.length){ host.innerHTML=`<div class="hyd-empty">No ${m.label.toLowerCase()} recorded in this ${ACT_PERIOD}.</div>`; return; }
-  const scale=Math.max(m.goal,...bars.map(b=>b.v));
-  const gap=ACT_PERIOD==='month'?2:(ACT_PERIOD==='year'?6:7);
-  const vals=live.map(b=>b.v), avg=vals.reduce((a,b)=>a+b,0)/vals.length;
-  const best=Math.max(...vals), hits=vals.filter(v=>v>=m.goal).length;
-
-  let h=`<div class="hyd-chart" style="--hyd-gap:${gap}px">
-    <div class="hyd-goal" style="bottom:${(m.goal/scale*100).toFixed(1)}%"><span>goal ${m.fmt(m.goal)}${m.unit}</span></div>`;
-  bars.forEach(b=>{
-    const cls=(!b.on?'gap':'')+(b.hi?' today':'');
-    const pct=b.on&&b.v>0?Math.max(3,b.v/scale*100):0;
-    h+=`<div class="hyd-col" title="${esc(b.tip)}"><div class="hyd-bar ${cls}" data-h="${pct.toFixed(1)}"${b.on&&b.v>0?' style="height:0"':''}></div></div>`;
-  });
-  h+=`</div><div class="hyd-labs">`;
-  bars.forEach(b=>{ h+=`<span class="${b.hi?'hi':''}">${b.lab}</span>`; });
-  h+=`</div><div class="hyd-stats">
-      <div><b>${m.fmt(avg)}${m.unit}</b><i>${m.avg}</i></div>
-      <div><b>${m.fmt(best)}${m.unit}</b><i>best</i></div>
-      <div><b>${hits}<span style="color:var(--txt-3);font-size:12px">/${live.length}</span></b><i>goal days</i></div>
-    </div>`;
-  host.innerHTML=h;
-  const grow=()=>host.querySelectorAll('.hyd-bar[data-h]').forEach(el=>{el.style.height=el.dataset.h+'%';});
-  if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches) grow();
-  else requestAnimationFrame(()=>requestAnimationFrame(grow));
-}
-function activityCardHTML(){
-  const keys=Object.keys(HEALTHLOG).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
-  const first=keys[0]||todayKey(), pk=periodKeys(ACT_PERIOD,ACT_OFF);
-  return `<div class="month-row" style="margin-top:22px"><h2>Steps &amp; sleep</h2>
-      <div class="filt" style="padding:0;gap:6px">
-        ${['steps','sleep'].map(k=>`<button data-am="${k}" class="${ACT_METRIC===k?'on':''}">${ACT_META[k].label}</button>`).join('')}
-      </div></div>
-    <div class="filt" style="padding:0 0 10px;gap:6px">
-      ${['week','month','year'].map(p=>`<button data-ap="${p}" class="${ACT_PERIOD===p?'on':''}">${cap(p)}</button>`).join('')}
-    </div>
-    <div class="sumcard" style="padding:16px">
-      <div class="hyd-head">
-        <div class="hyd-nav"><button id="actPrev" ${pk[pk.length-1]<first?'disabled':''}>‹</button></div>
-        <div class="hyd-range">${esc(periodLabel(ACT_PERIOD,ACT_OFF))}</div>
-        <div class="hyd-nav"><button id="actNext" ${ACT_OFF>=0?'disabled':''}>›</button></div>
-      </div>
-      <div id="actBody"></div>
-    </div>`;
-}
-function paintActivityCard(){
-  const c=document.getElementById('actCard'); if(!c) return;
-  c.innerHTML=activityCardHTML();
-  c.querySelectorAll('[data-am]').forEach(b=>b.onclick=()=>{ if(ACT_METRIC===b.dataset.am)return; ACT_METRIC=b.dataset.am; paintActivityCard(); });
-  c.querySelectorAll('[data-ap]').forEach(b=>b.onclick=()=>{ if(ACT_PERIOD===b.dataset.ap)return; ACT_PERIOD=b.dataset.ap; ACT_OFF=0; paintActivityCard(); });
-  const p=document.getElementById('actPrev'), n=document.getElementById('actNext');
-  if(p) p.onclick=()=>{ ACT_OFF--; paintActivityCard(); };
-  if(n) n.onclick=()=>{ ACT_OFF++; paintActivityCard(); };
-  renderActivity();
-}
-
-function weightCardHTML(){
-  const keys=Object.keys(HEALTHLOG).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
-  const first=keys[0]||todayKey();
-  const pk=periodKeys(WT_PERIOD,WT_OFF);
-  return `<div class="month-row" style="margin-top:22px"><h2>Weight</h2>
-      <div class="filt" style="padding:0;gap:6px">
-        ${['week','month','year'].map(p=>`<button data-wp="${p}" class="${WT_PERIOD===p?'on':''}">${cap(p)}</button>`).join('')}
-      </div></div>
-    <div class="sumcard" style="padding:16px">
-      <div class="hyd-head">
-        <div class="hyd-nav"><button id="wtPrev" ${pk[pk.length-1]<first?'disabled':''}>‹</button></div>
-        <div class="hyd-range">${esc(periodLabel(WT_PERIOD,WT_OFF))}</div>
-        <div class="hyd-nav"><button id="wtNext" ${WT_OFF>=0?'disabled':''}>›</button></div>
-      </div>
-      <div id="wtBody"></div>
-      <button class="cta ghost" id="wtAdd" style="margin-top:12px">+ Log today's weight</button>
-    </div>`;
-}
-function paintWeightCard(){
-  const c=document.getElementById('wtCard'); if(!c) return;
-  c.innerHTML=weightCardHTML();
-  c.querySelectorAll('[data-wp]').forEach(b=>b.onclick=()=>{ if(WT_PERIOD===b.dataset.wp)return; WT_PERIOD=b.dataset.wp; WT_OFF=0; paintWeightCard(); });
-  const p=document.getElementById('wtPrev'), n=document.getElementById('wtNext');
-  if(p) p.onclick=()=>{ WT_OFF--; paintWeightCard(); };
-  if(n) n.onclick=()=>{ WT_OFF++; paintWeightCard(); };
-  document.getElementById('wtAdd').onclick=openWeightEntry;
-  renderWeightCard();
-}
 function openWeightEntry(){
   const cur=HEALTHLOG[todayKey()]||{};
   openSheet(`<h3>Today's weight</h3><div class="meta">${esc(fmtDateKey(todayKey()))}</div>
@@ -4258,7 +4710,7 @@ function openWeightEntry(){
       muscle:document.getElementById('weMus').value},'manual');
     if(!ok){ toast('Enter a weight in kg'); return; }
     await weightCommit(1,'manual');
-    closeSheet(); paintWeightCard(); renderAll(); toast('Weight saved');
+    closeSheet(); healthRepaint(); renderAll(); toast('Weight saved');
   };
   document.getElementById('weCancel').onclick=closeSheet;
 }
@@ -5243,122 +5695,10 @@ function periodLabel(period,off){
    Reads PLAN directly instead of via ensureDay() — ensureDay materialises a day
    object, and walking a year of keys through it would fabricate 365 empty days
    that the next savePlan() would persist and push to the gist. */
-let HYD_PERIOD='week', HYD_OFF=0;
-
-function waterOn(key){ const d=PLAN[key]; return d ? (+d.water||0) : 0; }
-/* Earliest day this install knows about — days before it are "not tracked"
-   rather than "drank nothing", so they neither draw a zero bar nor drag the
-   average down. */
-function hydFirstKey(){
-  let first=null;
-  for(const k in PLAN){ if(/^\d{4}-\d{2}-\d{2}$/.test(k) && (!first||k<first)) first=k; }
-  return first||todayKey();
-}
-
-function renderHydration(){
-  const host=document.getElementById('hydBody'); if(!host) return;
-  const per=HYD_PERIOD, keys=periodKeys(per,HYD_OFF);
-  const first=hydFirstKey(), today=todayKey();
-  const tracked=k=>k>=first&&k<=today;
-
-  // bars: one per day for week/month, one per month for year
-  let bars;
-  if(per==='year'){
-    const by={};
-    keys.forEach(k=>{ const m=+k.slice(5,7)-1; (by[m]=by[m]||[]).push(k); });
-    bars=Array.from({length:12},(_,m)=>{
-      const days=(by[m]||[]).filter(tracked);
-      const sum=days.reduce((s,k)=>s+waterOn(k),0);
-      const nm=new Date(2000,m,1).toLocaleDateString(undefined,{month:'long'});
-      return {v:days.length?sum/days.length:0, on:days.length>0, lab:'JFMAMJJASOND'[m],
-              hi:days.includes(today), tip:`${nm} · ${days.length?(sum/days.length).toFixed(1)+' avg':'not tracked'}`};
-    });
-  } else {
-    const wk=['M','T','W','T','F','S','S'];
-    bars=keys.map((k,i)=>{
-      const d=dateOf(k), v=waterOn(k), on=tracked(k);
-      const dn=d.getDate(), last=keys.length;
-      /* month ticks: 1st, every 5th, and the last day — but skip the last when
-         it would sit on top of the preceding tick (31 next to 30). */
-      const showLast=i===last-1 && dn%5!==0 && dn-Math.floor(dn/5)*5>2;
-      const lab=per==='week' ? wk[i]
-              : (i===0||dn%5===0||showLast) ? String(dn) : '';
-      return {v,on,lab,hi:k===today,tip:`${fmtDateKey(k)} · ${on?`${v} glass${v===1?'':'es'}`:'not tracked'}`};
-    });
-  }
-
-  const live=bars.filter(b=>b.on);
-  if(!live.length){
-    host.innerHTML=`<div class="hyd-empty">Nothing logged in this ${per}.</div>`;
-    return;
-  }
-  const scale=Math.max(WATER_TARGET,...bars.map(b=>b.v));
-  const gap=per==='month'?2:(per==='year'?6:7);
-
-  const dayKeys=keys.filter(tracked);
-  const total=dayKeys.reduce((s,k)=>s+waterOn(k),0);
-  const avg=dayKeys.length?total/dayKeys.length:0;
-  const hits=dayKeys.filter(k=>waterOn(k)>=WATER_TARGET).length;
-
-  let h=`<div class="hyd-chart" style="--hyd-gap:${gap}px">
-    <div class="hyd-goal" style="bottom:${(WATER_TARGET/scale*100).toFixed(1)}%"><span>goal ${WATER_TARGET}</span></div>`;
-  bars.forEach(b=>{
-    /* today gets marked on the bar, not the label — in month view most labels
-       are blank to avoid crowding, so a label-only highlight goes invisible. */
-    const cls=(!b.on?'gap':(b.v<=0?'zero':''))+(b.hi?' today':'');
-    const pct=b.on&&b.v>0?Math.max(3,b.v/scale*100):0;
-    h+=`<div class="hyd-col" title="${esc(b.tip)}"><div class="hyd-bar ${cls}" data-h="${pct.toFixed(1)}"${b.on&&b.v>0?' style="height:0"':''}></div></div>`;
-  });
-  h+=`</div><div class="hyd-labs">`;
-  bars.forEach(b=>{ h+=`<span class="${b.hi?'hi':''}">${b.lab}</span>`; });
-  h+=`</div>
-    <div class="hyd-stats">
-      <div><b>${avg.toFixed(1)}</b><i>avg glasses</i></div>
-      <div><b>${(avg*250/1000).toFixed(1)} L</b><i>per day</i></div>
-      <div><b>${hits}<span style="color:var(--txt-3);font-size:12px">/${dayKeys.length}</span></b><i>goal days</i></div>
-    </div>`;
-  host.innerHTML=h;
-
-  // grow the bars in so a period switch reads as a change, not a redraw
-  const grow=()=>host.querySelectorAll('.hyd-bar[data-h]').forEach(el=>{el.style.height=el.dataset.h+'%';});
-  if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches) grow();
-  else requestAnimationFrame(()=>requestAnimationFrame(grow));
-}
-
-function bindHydration(){
-  const card=document.getElementById('hydCard'); if(!card) return;
-  card.querySelectorAll('[data-hp]').forEach(b=>b.onclick=()=>{
-    if(HYD_PERIOD===b.dataset.hp) return;
-    HYD_PERIOD=b.dataset.hp; HYD_OFF=0; paintHydration();
-  });
-  const nav=d=>()=>{ HYD_OFF+=d; paintHydration(); };
-  const p=document.getElementById('hydPrev'), n=document.getElementById('hydNext');
-  if(p) p.onclick=nav(-1);
-  if(n) n.onclick=nav(1);
-}
-function paintHydration(){
-  const card=document.getElementById('hydCard'); if(!card) return;
-  card.innerHTML=hydCardHTML();
-  bindHydration();
-  renderHydration();
-}
-function hydCardHTML(){
-  const first=hydFirstKey();
-  const keys=periodKeys(HYD_PERIOD,HYD_OFF);
-  const atStart=keys[keys.length-1]<first;   // whole period predates any data
-  return `<div class="month-row" style="margin-top:8px"><h2>Hydration</h2>
-      <div class="filt" style="padding:0;gap:6px">
-        ${['week','month','year'].map(p=>`<button data-hp="${p}" class="${HYD_PERIOD===p?'on':''}">${cap(p)}</button>`).join('')}
-      </div></div>
-    <div class="sumcard" style="padding:16px">
-      <div class="hyd-head">
-        <div class="hyd-nav"><button id="hydPrev" ${atStart?'disabled':''} aria-label="Previous">‹</button></div>
-        <div class="hyd-range">${esc(periodLabel(HYD_PERIOD,HYD_OFF))}</div>
-        <div class="hyd-nav"><button id="hydNext" ${HYD_OFF>=0?'disabled':''} aria-label="Next">›</button></div>
-      </div>
-      <div id="hydBody"></div>
-    </div>`;
-}
+/* The Profile hydration and weight graphs were removed when both moved to the
+   Health tab. waterOn() and hydFirstKey() went with them: they had no callers
+   outside those two cards. PLAN[key].water is still the store, written now by
+   the glass row in waterCardHTML(). */
 
 function renderProfileProgress(){
   const b=document.getElementById('profBody');
@@ -5375,10 +5715,8 @@ function renderProgressExtras(){
   const w=computeWorkoutStats(), m=computeMealStats();
   let html='';
 
-  // Hydration graph — painted after innerHTML so it can repaint itself on period change
-  html+=`<div data-sec="hyd" id="hydCard"></div>`;
-  html+=`<div data-sec="wt" id="wtCard"></div>`;
-  html+=`<div data-sec="act" id="actCard"></div>`;
+  /* Hydration, weight and steps moved to the Health tab, which is where the
+     rest of the body data lives. Progress is training history now. */
 
   // Achievements
   const earned=ACHIEVEMENTS.filter(a=>a.earned(w,m)).length;
@@ -5406,9 +5744,6 @@ function renderProgressExtras(){
   html+=`</div></div>`;
 
   host.innerHTML=html;
-  paintHydration();
-  paintWeightCard();
-  paintActivityCard();
   host.querySelectorAll('[data-pr]').forEach(c=>c.onclick=()=>{
     const i=+c.dataset.pr,p=PRs[i];
     const v=prompt(`${p.name} (${p.unit})`,p.value??'');
@@ -7059,7 +7394,7 @@ function decorateEditable(){
     ctl.className='sec-ctl';
     ctl.innerHTML=`<span class="sc-grip" draggable="true">⠿</span>
       <span class="sc-label">${SEC_LABEL[id]||id}</span>
-      <button class="sc-eye ${hidden?'off':''}">${hidden?'👁 Hidden':'👁 Shown'}</button>`;
+      <button class="sc-eye ${hidden?'off':''}">${hidden?GH_ICON.eyeOff+' Hidden':GH_ICON.eye+' Shown'}</button>`;
     el.classList.add('sec-editable');
     el.prepend(ctl);
 
@@ -8809,6 +9144,13 @@ document.addEventListener('visibilitychange',()=>{
   _syncLastFocus=Date.now();
   syncNow('focus');
 });
+/* The connectors are measured from laid-out geometry, so a width change (rotation,
+   or crossing the wider breakpoint) leaves them pointing at the old rows. */
+let _hypRT=0;
+window.addEventListener('resize',()=>{
+  clearTimeout(_hypRT);
+  _hypRT=setTimeout(()=>{ try{ paintHypLinks(healthDay()); }catch(e){} },120);
+},{passive:true});
 window.addEventListener('online',()=>{
   if(!syncOn()||SYNC_QUIET) return;
   syncNow('online');
