@@ -1046,6 +1046,7 @@ if ('serviceWorker' in navigator) {
       <button data-tab="training">Training</button>
       <button data-tab="food">Food</button>
       <button data-tab="shop">Shopping</button>
+      <button data-tab="health">Health</button>
     </div>
 
     <section id="tab-week">
@@ -1080,6 +1081,12 @@ if ('serviceWorker' in navigator) {
     <section id="tab-shop" class="hide">
       <div class="month-row"><h2>Shopping List</h2><span class="sub" id="shopWeekLab"></span></div>
       <div id="shopList"></div>
+    </section>
+
+    <section id="tab-health" class="hide">
+      <div class="month-row"><h2>Health</h2><span class="sub">from your Fitbit Air</span></div>
+      <div id="healthBody"></div>
+      <button class="cta ghost" id="hvRefresh" style="margin-top:16px">⟳ Pull from Google Health</button>
     </section>
 
     <section id="tab-food" class="hide">
@@ -3139,6 +3146,19 @@ function weightRecord(entry,src){
 
 /* Steps and sleep merge into the same dated row rather than replacing it — a
    weigh-in and a step count for the same day must not overwrite each other. */
+/* Everything past steps/sleep/active arrives only from Google Health. Each entry
+   is [min, max, decimals] — a bound that rejects a parse error without pretending
+   to be medicine. Absent fields are left alone rather than zeroed, so a Shortcut
+   sending just steps can't wipe the night's sleep stages. */
+const HEALTH_EXTRA={
+  kcalOut:[1,20000,0],    // calories burned, whole day
+  azm    :[1,2000,0],     // active zone minutes
+  hrv    :[1,400,1],      // ms
+  rhr    :[20,200,0],     // resting bpm
+  vo2    :[5,100,1],
+  hrMin  :[20,220,0], hrAvg:[20,220,0], hrMax:[20,240,0],
+  deep   :[1,1440,0], rem:[1,1440,0], light:[1,1440,0], awake:[0,1440,0],
+};
 function healthRecord(entry){
   const key=/^\d{4}-\d{2}-\d{2}$/.test(entry.date||'')?entry.date:todayKey();
   const steps=Math.round(+entry.steps||0);
@@ -3148,11 +3168,23 @@ function healthRecord(entry){
      sample can send a month's steps as one day, and 30h of sleep is a parse
      error rather than a lie-in. */
   const ok_s=steps>0&&steps<200000, ok_z=sleep>0&&sleep<=24, ok_a=active>0&&active<20000;
-  if(!ok_s&&!ok_z&&!ok_a) return false;
   const rec=Object.assign({},HEALTHLOG[key]);
-  if(ok_s) rec.steps=steps;
-  if(ok_z) rec.sleep=+sleep.toFixed(2);
-  if(ok_a) rec.active=active;
+  let any=false;
+  if(ok_s){ rec.steps=steps; any=true; }
+  if(ok_z){ rec.sleep=+sleep.toFixed(2); any=true; }
+  if(ok_a){ rec.active=active; any=true; }
+  for(const f in HEALTH_EXTRA){
+    if(entry[f]==null||entry[f]==='') continue;
+    const [lo,hi,dp]=HEALTH_EXTRA[f], v=+entry[f];
+    if(!isFinite(v)||v<lo||v>hi) continue;
+    rec[f]=dp?+v.toFixed(dp):Math.round(v);
+    any=true;
+  }
+  /* Detected workouts are a list per day, not a scalar. Replaced wholesale
+     rather than merged: the API is the authority on what it recorded, and
+     appending would duplicate every session on each re-pull. */
+  if(Array.isArray(entry.acts)){ rec.acts=entry.acts; any=true; }
+  if(!any) return false;
   rec.src=rec.src||'health';
   HEALTHLOG[key]=rec;
   return true;
@@ -3249,6 +3281,805 @@ async function weightDrainInbox(force){
   toast(n===1?'1 reading from Apple Health':n+' readings from Apple Health');
   try{ renderStats&&renderStats('statsBody'); renderProgressExtras&&renderProgressExtras(); }catch(e){}
   return n;
+}
+
+
+/* ============ GOOGLE HEALTH (Fitbit Air) ============
+   The Air has no screen and no Bluetooth path a web page could use, but it
+   syncs to Fitbit's servers, and the Google Health API reads from there:
+
+     Fitbit Air -> Fitbit app (signed in with Google) -> health.googleapis.com
+
+   This is the official API (the successor to the Fitbit Web API), not a
+   loophole. Both endpoints it needs send CORS headers for this origin, so the
+   whole flow — consent, code exchange, refresh, data — runs in the browser with
+   no backend. Aerte stays a static file.
+
+   Steps and sleep land in the SAME healthRecord() funnel the Shortcuts paths
+   use, so nothing here needs a new key or a migration; it is a third way in,
+   not a second store. Weight is deliberately not fetched: the Air has no scale,
+   and the Xiaomi -> Zepp Life -> Apple Health chain doesn't feed Google. That
+   stays on weightDrainInbox().
+
+   Credentials live in aerte_gh_cfg, which is NOT in ALL_STORE_KEYS — same rule
+   as aerte_sync_cfg. It holds an OAuth client secret and a refresh token; those
+   are per-device and must never reach the gist or a backup file. syncTouch()
+   already ignores keys outside that list, so writing them can't dirty sync.
+
+   The 7-day catch: while the Cloud project sits in Testing mode, Google expires
+   every refresh token after exactly 7 days (the token response says so —
+   refresh_token_expires_in: 604799). Escaping that needs a paid third-party
+   security review, so instead we detect invalid_grant, park in 'reauth', and
+   ask for one tap. Nothing is lost: the next pull backfills the gap. */
+const GH_CFG_KEY  ='aerte_gh_cfg';    // {clientId, secret, refresh, auto}
+const GH_STATE_KEY='aerte_gh_state';  // {lastOkAt, consentAt, days}
+const GH_API   ='https://health.googleapis.com/v4';
+const GH_AUTH  ='https://accounts.google.com/o/oauth2/v2/auth';
+const GH_TOKEN ='https://oauth2.googleapis.com/token';
+const GH_SCOPES=[
+  'https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly',
+  'https://www.googleapis.com/auth/googlehealth.sleep.readonly',
+].join(' ');
+const GH_FOCUS_GAP=15*60*1000;   // a pull per quarter hour of foreground is plenty
+const GH_BACKFILL=90;            // first successful pull reaches this far back
+
+let GH_CFG={clientId:'',secret:'',refresh:'',auto:true};
+let GH_ST ={lastOkAt:0,consentAt:0,days:0};
+let GH_STATUS='off';             // off | idle | pulling | reauth | error
+let GH_MSG='';
+let _ghTok='', _ghTokExp=0, _ghFocus=0;
+
+function saveGHCfg(){ gset(GH_CFG_KEY,JSON.stringify(GH_CFG)); }
+function saveGHState(){ gset(GH_STATE_KEY,JSON.stringify(GH_ST)); }
+function loadGH(){
+  let r=gget(GH_CFG_KEY);
+  if(r){ try{ Object.assign(GH_CFG,JSON.parse(r.value)); }catch(e){} }
+  r=gget(GH_STATE_KEY);
+  if(r){ try{ Object.assign(GH_ST,JSON.parse(r.value)); }catch(e){} }
+  GH_STATUS=ghOn()?'idle':'off';
+}
+/* Configured means "could pull without asking the user anything" — a client id
+   and secret with no refresh token is a half-finished setup, not a connection. */
+function ghOn(){ return !!(GH_CFG.clientId&&GH_CFG.secret&&GH_CFG.refresh); }
+function ghSet(status,msg){ GH_STATUS=status; GH_MSG=msg||''; renderGHChip(); }
+
+/* Google matches the redirect URI byte for byte against the registered one, and
+   a PWA can be opened at a path with a query or hash still attached. Strip back
+   to origin + path so what we send is always what the console was given — and
+   so the settings screen can show the exact string to paste. */
+function ghRedirectUri(){
+  /* Trailing index.html is stripped so there is exactly ONE string to register.
+     The manifest's start_url is ".", so the installed PWA launches at /Aerte/
+     while a browser visit is /Aerte/index.html — same page, two pathnames, and
+     Google matches the redirect URI byte for byte. Whichever way Aerte was
+     opened, the console only ever needs the directory form. */
+  return location.origin+location.pathname.replace(/index\.html$/,'');
+}
+
+function ghConnect(){
+  if(!GH_CFG.clientId||!GH_CFG.secret){ toast('Enter the client ID and secret first'); return; }
+  const nonce=Math.random().toString(36).slice(2)+Date.now().toString(36);
+  try{ sessionStorage.setItem('gh_state',nonce); }catch(e){}
+  const p=new URLSearchParams({
+    client_id:GH_CFG.clientId,
+    redirect_uri:ghRedirectUri(),
+    response_type:'code',
+    scope:GH_SCOPES,
+    /* offline or no refresh token comes back at all; consent or Google reissues
+       one only on the very first grant — which after the 7-day expiry would
+       leave us with an access token and no way to renew it. */
+    access_type:'offline',
+    prompt:'consent',
+    state:nonce,
+  });
+  location.href=GH_AUTH+'?'+p.toString();
+}
+
+async function ghExchange(body){
+  const res=await fetch(GH_TOKEN,{
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:new URLSearchParams(body),
+  });
+  const j=await res.json().catch(()=>({}));
+  if(!res.ok){
+    /* invalid_grant is the 7-day expiry (or a revoked grant). The refresh token
+       is dead for good, so drop it — keeping it would retry forever and the
+       user would never be told to reconnect. */
+    if(j.error==='invalid_grant'){
+      GH_CFG.refresh=''; saveGHCfg();
+      ghSet('reauth','Google sign-in expired — tap to reconnect');
+      throw new Error('reauth');
+    }
+    throw new Error(j.error_description||j.error||('token '+res.status));
+  }
+  return j;
+}
+
+/* ---- return leg of the consent flow: ?code=... on our own URL ---- */
+async function ghFromURL(){
+  const q=new URLSearchParams(location.search);
+  const code=q.get('code'), st=q.get('state'), err=q.get('error');
+  if(!code&&!err) return 0;
+  const strip=()=>{ try{ history.replaceState(null,'',location.pathname); }catch(e){} };
+  if(err){ strip(); ghSet('error','Consent was declined'); toast('Google sign-in cancelled'); return 0; }
+
+  let want=''; try{ want=sessionStorage.getItem('gh_state')||''; }catch(e){}
+  try{ sessionStorage.removeItem('gh_state'); }catch(e){}
+  /* A code that arrives without the nonce we generated didn't come from a flow
+     this tab started. Drop it rather than exchange it. */
+  if(!want||st!==want){ strip(); ghSet('error','Sign-in response didn\'t match this device'); return 0; }
+
+  strip();   // before the await: a reload mid-exchange must not replay the code
+  try{
+    const t=await ghExchange({
+      code,client_id:GH_CFG.clientId,client_secret:GH_CFG.secret,
+      redirect_uri:ghRedirectUri(),grant_type:'authorization_code',
+    });
+    if(!t.refresh_token){
+      ghSet('error','Google didn\'t return a refresh token — reconnect and accept the consent screen');
+      return 0;
+    }
+    GH_CFG.refresh=t.refresh_token; saveGHCfg();
+    _ghTok=t.access_token||''; _ghTokExp=Date.now()+((+t.expires_in||3600)-60)*1000;
+    GH_ST.consentAt=Date.now(); saveGHState();
+    ghSet('idle','');
+    toast('Google Health connected');
+    return await ghPull(GH_ST.lastOkAt?14:GH_BACKFILL,true);
+  }catch(e){
+    if(e.message!=='reauth') ghSet('error',String(e.message||e));
+    return 0;
+  }
+}
+
+async function ghAccessToken(){
+  if(_ghTok&&Date.now()<_ghTokExp) return _ghTok;
+  if(!ghOn()) return '';
+  const t=await ghExchange({
+    client_id:GH_CFG.clientId,client_secret:GH_CFG.secret,
+    refresh_token:GH_CFG.refresh,grant_type:'refresh_token',
+  });
+  _ghTok=t.access_token||'';
+  _ghTokExp=Date.now()+((+t.expires_in||3600)-60)*1000;
+  return _ghTok;
+}
+
+async function ghFetch(path,tok,opts){
+  const res=await fetch(GH_API+path,Object.assign({},opts,{
+    headers:Object.assign({Authorization:'Bearer '+tok,Accept:'application/json',
+      'Content-Type':'application/json'},(opts||{}).headers),
+  }));
+  if(!res.ok) throw new Error('Health API '+res.status+' — '+(await res.text()).slice(0,180));
+  return res.json();
+}
+
+/* Rollup points carry civilStartTime — the wall-clock date on the device that
+   recorded them. Use it rather than parsing the UTC startTime: a day boundary
+   converted through the browser's timezone is exactly how a step count lands on
+   the wrong date, and HEALTHLOG is keyed by local date. */
+function ghKeyOf(p){
+  const c=p&&p.civilStartTime&&p.civilStartTime.date;
+  if(c&&c.year) return c.year+'-'+String(c.month).padStart(2,'0')+'-'+String(c.day).padStart(2,'0');
+  if(p&&p.startTime){ const d=new Date(p.startTime); if(!isNaN(d)) return keyOf(d); }
+  return null;
+}
+function ghRollupBody(daysBack){
+  const end=new Date(), start=new Date();
+  start.setDate(start.getDate()-daysBack);
+  const cd=d=>({year:d.getFullYear(),month:d.getMonth()+1,day:d.getDate()});
+  return {range:{
+    start:{date:cd(start),time:{hours:0,minutes:0,seconds:0,nanos:0}},
+    end  :{date:cd(end),  time:{hours:23,minutes:59,seconds:59,nanos:0}},
+  },windowSizeDays:1};
+}
+async function ghRollup(tok,type,daysBack){
+  const j=await ghFetch('/users/me/dataTypes/'+type+'/dataPoints:dailyRollUp',tok,
+    {method:'POST',body:JSON.stringify(ghRollupBody(daysBack))});
+  return j.rollupDataPoints||[];
+}
+
+/* Every numeric field arrives as a string (protobuf int64), so + everywhere. */
+async function ghPull(daysBack,manual){
+  if(!ghOn()) return 0;
+  if(GH_STATUS==='pulling') return 0;
+  daysBack=Math.max(1,Math.min(daysBack|0||14,365));
+  ghSet('pulling','');
+  let tok;
+  try{ tok=await ghAccessToken(); }
+  catch(e){
+    if(e.message!=='reauth') ghSet('error',String(e.message||e));
+    return 0;
+  }
+  if(!tok){ ghSet('reauth','Google sign-in expired — tap to reconnect'); return 0; }
+
+  const rows={};   // date key -> partial healthRecord entry
+  const put=(k,f,v)=>{ if(!k||!(v>0)) return; (rows[k]=rows[k]||{date:k})[f]=v; };
+  /* The consent screen lets a user untick individual scopes, and Google asks
+     apps to survive that. Swallowing the failure silently is the wrong kind of
+     graceful though: a missing sleep.readonly then looks identical to a Fitbit
+     with no sleep data, and you'd go hunting in the wrong place. Record which
+     streams dropped out and say so. */
+  const lost=[];
+  const dtLabel=t=>({'daily-heart-rate-variability':'HRV','daily-resting-heart-rate':'resting HR',
+                     'daily-vo2-max':'VO\u2082 max'}[t]||t);
+  const soft=(label,p)=>p.catch(e=>{ lost.push(label+(/\b403\b/.test(String(e.message))?' (scope not granted)':'')); return null; });
+  try{
+    /* One list call per daily-metric type. They're independent, so they go out
+       together — the whole pull is then bounded by the slowest, not the sum. */
+    const daily=(type,field)=>soft(dtLabel(type),ghFetch(
+      '/users/me/dataTypes/'+type+'/dataPoints?'+new URLSearchParams({
+        filter:field+'.date >= "'+addDays(todayKey(),-daysBack)+'"', page_size:'400',
+      }),tok).then(j=>j.dataPoints||[]));
+
+    const [steps,active,sleep,kcal,azm,hrv,rhr,vo2,acts]=await Promise.all([
+      ghRollup(tok,'steps',daysBack),
+      soft('active minutes',ghRollup(tok,'active-minutes',daysBack)),
+      soft('sleep',ghFetch('/users/me/dataTypes/sleep/dataPoints?'+new URLSearchParams({
+        filter:'sleep.interval.civil_end_time >= "'+addDays(todayKey(),-daysBack)+'"',
+        page_size:'100',
+      }),tok).then(j=>j.dataPoints||[])),
+      soft('calories',ghRollup(tok,'total-calories',daysBack)),
+      soft('zone minutes',ghRollup(tok,'active-zone-minutes',daysBack)),
+      daily('daily-heart-rate-variability','daily_heart_rate_variability'),
+      daily('daily-resting-heart-rate','daily_resting_heart_rate'),
+      daily('daily-vo2-max','daily_vo2_max'),
+      soft('activities',ghFetch('/users/me/dataTypes/exercise/dataPoints?'+new URLSearchParams({
+        filter:'exercise.interval.civil_start_time >= "'+addDays(todayKey(),-daysBack)+'T00:00:00"',
+        page_size:'200',
+      }),tok).then(j=>j.dataPoints||[])),
+    ]).then(r=>r.map((x,i)=>i===0?x:(x||[])));
+
+    steps.forEach(p=>put(ghKeyOf(p),'steps',+((p.steps||{}).countSum||0)));
+
+    /* active-minutes is bucketed by intensity; Aerte keeps one number, so the
+       three levels are summed. NOTE this is MINUTES, whereas the Apple Health
+       Shortcut has been sending active ENERGY into the same field. Nothing
+       renders rec.active today, so no display breaks either way — but decide
+       which unit you want before you build a card on it. */
+    active.forEach(p=>{
+      const b=((p.activeMinutes||{}).activeMinutesRollupByActivityLevel)||[];
+      put(ghKeyOf(p),'active',b.reduce((s,x)=>s+(+x.activeMinutesSum||0),0));
+    });
+
+    kcal.forEach(p=>put(ghKeyOf(p),'kcalOut',+((p.totalCalories||{}).caloriesSum||(p.totalCalories||{}).kcalSum||0)));
+    azm.forEach(p=>{
+      const a=p.activeZoneMinutes||{};
+      /* Fitbit's own AZM total weights vigorous double. Prefer whatever sum the
+         API hands back; fall back to the zone breakdown only if it doesn't. */
+      let v=+(a.totalMinutesSum||a.minutesSum||0);
+      if(!(v>0)&&Array.isArray(a.activeZoneMinutesRollupByHeartRateZone))
+        v=a.activeZoneMinutesRollupByHeartRateZone.reduce((s,z)=>s+(+z.minutesSum||0),0);
+      put(ghKeyOf(p),'azm',v);
+    });
+    const civil=o=>{ const c=o&&o.date; return c&&c.year
+      ? c.year+'-'+String(c.month).padStart(2,'0')+'-'+String(c.day).padStart(2,'0') : null; };
+    hrv.forEach(d=>{ const o=d.dailyHeartRateVariability||{};
+      put(civil(o),'hrv',+(o.averageHeartRateVariabilityMilliseconds||0)); });
+    rhr.forEach(d=>{ const o=d.dailyRestingHeartRate||{};
+      put(civil(o),'rhr',+(o.beatsPerMinute||0)); });
+    vo2.forEach(d=>{ const o=d.dailyVo2Max||{};
+      put(civil(o),'vo2',+(o.vo2Max||o.value||0)); });
+
+    /* Sleep is filed under the date you woke up, which is what a night's sleep
+       means to the week view and matches the Apple Health rows already stored.
+       Stages ride along in the same payload — no extra call, no extra scope. */
+    sleep.forEach(d=>{
+      const s=d.sleep||{}, iv=s.interval||{};
+      const c=iv.civilEndTime&&iv.civilEndTime.date;
+      const k=c&&c.year ? c.year+'-'+String(c.month).padStart(2,'0')+'-'+String(c.day).padStart(2,'0')
+            : (iv.endTime&&!isNaN(new Date(iv.endTime))?keyOf(new Date(iv.endTime)):null);
+      const sum=s.summary||{};
+      put(k,'sleep',+(sum.minutesAsleep||0)/60);
+      (sum.stagesSummary||[]).forEach(st=>{
+        const f={DEEP:'deep',REM:'rem',LIGHT:'light',AWAKE:'awake'}[String(st.type||'').toUpperCase()];
+        if(f) put(k,f,+(st.minutes||0));
+      });
+    });
+
+    /* Detected workouts group by the day they started. Only the fields a card
+       actually shows are kept — the raw payload carries per-second events and
+       would bloat storage for nothing. */
+    const byDay={};
+    acts.forEach(d=>{
+      const e=d.exercise||{}, iv=e.interval||{};
+      const k=civil(iv.civilStartTime)||(iv.startTime&&!isNaN(new Date(iv.startTime))?keyOf(new Date(iv.startTime)):null);
+      if(!k) return;
+      const m=e.metricsSummary||{};
+      /* Google's own docs print this key misspelled as distanceMillimiters.
+         Read both so a fix on their side doesn't silently blank the distance. */
+      const dist=+(m.distanceMillimeters||m.distanceMillimiters||0);
+      (byDay[k]=byDay[k]||[]).push({
+        t:e.exerciseType||'OTHER', n:e.displayName||'Workout',
+        at:iv.startTime||'', sec:Math.round(+String(e.activeDuration||'0').replace('s','')||0),
+        kcal:Math.round(+m.caloriesKcal||0), hr:Math.round(+m.averageHeartRateBeatsPerMinute||0),
+        azm:Math.round(+m.activeZoneMinutes||0), km:dist?+(dist/1e6).toFixed(2):0,
+        man:(d.dataSource||{}).recordingMethod==='MANUAL',
+      });
+    });
+    for(const k in byDay){
+      byDay[k].sort((a,b)=>String(a.at).localeCompare(String(b.at)));
+      (rows[k]=rows[k]||{date:k}).acts=byDay[k];
+    }
+  }catch(e){
+    /* Steps is the one stream that isn't optional, so its failure is the pull's.
+       A 403 here is nearly always the scope, not the data. */
+    const m=String(e.message||e);
+    ghSet('error',/\b403\b/.test(m)
+      ? 'Google refused the request — check activity_and_fitness.readonly is added under Data Access and was ticked on the consent screen.'
+      : m);
+    return 0;
+  }
+
+  let n=0;
+  for(const k in rows) if(healthRecord(rows[k])) n++;
+  if(n) await weightCommit(n,'google');
+  GH_ST.lastOkAt=Date.now(); GH_ST.days=n; saveGHState();
+  ghSet(lost.length?'error':'idle',
+    lost.length?'Pulled steps, but no '+lost.join(' or ')+'. Re-connect and tick every box on the consent screen.':'');
+  if(n){
+    try{ renderStats&&renderStats('statsBody'); renderProgressExtras&&renderProgressExtras(); }catch(e){}
+    try{ if(!document.getElementById('tab-health').classList.contains('hide')) renderHealth(); }catch(e){}
+    if(manual) toast(n===1?'1 day from Google Health':n+' days from Google Health');
+  } else if(manual) toast('Google Health had nothing new');
+  return n;
+}
+
+function ghDisconnect(){
+  if(!confirm('Disconnect Google Health on this device? Steps and sleep already recorded stay where they are.')) return;
+  GH_CFG={clientId:GH_CFG.clientId,secret:'',refresh:'',auto:GH_CFG.auto};
+  GH_ST ={lastOkAt:0,consentAt:0,days:0};
+  _ghTok=''; _ghTokExp=0;
+  saveGHCfg(); saveGHState();
+  ghSet('off','');
+  toast('Google Health disconnected');
+}
+
+/* ---- status chip: borrows the sync chip's styling, its own element ---- */
+function ghChipText(){
+  if(GH_STATUS==='reauth') return 'Reconnect Google Health';
+  if(GH_STATUS==='error')  return 'Google Health error — tap for details';
+  return '';
+}
+function renderGHChip(){
+  let el=document.getElementById('ghChip');
+  const txt=ghChipText();
+  if(!txt){ if(el) el.classList.remove('show'); return; }
+  if(!el){
+    el=document.createElement('div');
+    el.id='ghChip'; el.className='sync-chip';
+    el.innerHTML='<span class="sc-dot"></span><span class="sc-txt"></span>';
+    el.onclick=openGoogleHealth;
+    document.body.appendChild(el);
+  }
+  el.className='sync-chip show s-'+(GH_STATUS==='reauth'?'waiting':GH_STATUS);
+  el.querySelector('.sc-txt').textContent=txt;
+}
+
+/* Consent is dated, and in Testing mode it dies 7 days later on the dot. Show
+   the countdown so the weekly tap is something you can see coming. */
+function ghExpiryNote(){
+  if(!ghOn()||!GH_ST.consentAt) return '';
+  const left=7*86400000-(Date.now()-GH_ST.consentAt);
+  if(left<=0) return 'Sign-in has expired — reconnect for one more week.';
+  const d=Math.floor(left/86400000), h=Math.floor(left%86400000/3600000);
+  return 'Sign-in valid for about '+(d?d+'d '+h+'h':h+'h')+' more (Testing mode caps it at 7 days).';
+}
+
+function openGoogleHealth(){
+  openSheet(`<h3>Google Health</h3>
+    <div class="meta">Pulls steps and sleep from your Fitbit Air straight into the week view. The client ID, secret and sign-in stay on this device — they are never put in the gist or in a backup file.</div>
+    <div id="ghBody"></div>`);
+  renderGHBody();
+}
+
+function renderGHBody(){
+  const host=document.getElementById('ghBody'); if(!host) return;
+  const label={off:'Not connected',idle:'Connected',pulling:'Fetching…',
+               reauth:'Sign-in expired',error:'Error'}[GH_STATUS]||GH_STATUS;
+  const autoOn=GH_CFG.auto!==false, note=ghExpiryNote();
+  host.innerHTML=`
+    <div class="sync-stat s-${GH_STATUS==='reauth'?'waiting':GH_STATUS}">
+      <span class="sc-dot"></span><span>${esc(label)}</span>
+      <span class="ss-sub">last pulled ${esc(syncRelTime(GH_ST.lastOkAt))}</span>
+    </div>
+    ${GH_MSG?`<div class="sync-note ${GH_STATUS==='error'?'bad':'warn'}">${esc(GH_MSG)}</div>`:''}
+    ${note?`<div class="sync-note warn">${esc(note)}</div>`:''}
+
+    <div class="field"><label>OAuth client ID</label>
+      <input id="ghId" type="text" inputmode="latin" autocomplete="off" spellcheck="false"
+        placeholder="…apps.googleusercontent.com" value="${esc(GH_CFG.clientId)}"></div>
+    <div class="field"><label>Client secret</label>
+      <input id="ghSec" type="password" autocomplete="off" spellcheck="false"
+        placeholder="${GH_CFG.secret?'•••••••• saved on this device':'GOCSPX-…'}"></div>
+
+    <div class="fx-row" style="margin-top:16px">
+      <div class="fx-txt"><div class="nm">Pull automatically</div><div class="ds">On open and when you come back to the app, at most once every ${GH_FOCUS_GAP/60000} minutes. Off means only the button below fetches.</div></div>
+      <button class="fx-sw ${autoOn?'on':''}" id="ghAuto" role="switch" aria-checked="${autoOn}"><i></i></button>
+    </div>
+
+    <button class="cta red" id="ghSave">${ghOn()?'Save':'Save and connect'}</button>
+    <button class="cta ghost" id="ghPull"${ghOn()?'':' disabled style="opacity:.45"'}>⟳ Pull now</button>
+    <button class="cta ghost" id="ghAuth">${ghOn()?'↻ Reconnect Google':'→ Connect Google'}</button>
+    ${ghOn()||GH_CFG.secret?`<button class="cta ghost" id="ghForget" style="color:var(--red)">⨯ Disconnect this device</button>`:''}
+
+    <p class="mm-note">Setup: <b>console.cloud.google.com</b> → new project → enable <b>Google Health API</b> → Credentials → OAuth client ID → <b>Web application</b>. Add this exact redirect URI:</p>
+    <p class="mm-note" style="user-select:all;word-break:break-all"><b>${esc(ghRedirectUri())}</b></p>
+    <p class="mm-note">Add the same string under <b>Authorized JavaScript origins</b> as <b>${esc(location.origin)}</b>. Then Audience → add your own Google account under <b>Test users</b>, and Data Access → add the <b>activity_and_fitness.readonly</b> and <b>sleep.readonly</b> scopes.</p>
+    <p class="mm-note">The Fitbit app must be signed in with the same Google account — that is what links the Air to this data. Weight still comes from the Apple Health shortcut; the Air has no scale.</p>`;
+
+  document.getElementById('ghAuto').onclick=()=>{ GH_CFG.auto=!(GH_CFG.auto!==false); saveGHCfg(); renderGHBody(); };
+  const grab=()=>{
+    GH_CFG.clientId=document.getElementById('ghId').value.trim();
+    const s=document.getElementById('ghSec').value.trim();
+    if(s) GH_CFG.secret=s;                 // blank means "keep the saved one"
+    saveGHCfg();
+  };
+  document.getElementById('ghSave').onclick=()=>{
+    grab();
+    if(!GH_CFG.clientId||!GH_CFG.secret){ toast('Need both a client ID and a secret'); return; }
+    if(ghOn()){ toast('Saved'); renderGHBody(); return; }
+    ghConnect();
+  };
+  document.getElementById('ghAuth').onclick=()=>{ grab(); ghConnect(); };
+  document.getElementById('ghPull').onclick=()=>{
+    if(!ghOn()) return;
+    ghPull(GH_ST.lastOkAt?14:GH_BACKFILL,true).then(renderGHBody).catch(()=>renderGHBody());
+    renderGHBody();
+  };
+  const f=document.getElementById('ghForget');
+  if(f) f.onclick=()=>{ ghDisconnect(); renderGHBody(); };
+}
+
+/* Auto-pull, same shape as the sync focus gate but on its own throttle — steps
+   should land whether or not gist sync is switched on. */
+function ghAutoPull(reason){
+  if(!ghOn()||GH_CFG.auto===false) return;
+  if(Date.now()-_ghFocus<GH_FOCUS_GAP) return;
+  _ghFocus=Date.now();
+  ghPull(GH_ST.lastOkAt?14:GH_BACKFILL,false).catch(()=>{});
+}
+
+
+/* ============ HEALTH TAB ============
+   Readiness, sleep, heart rate, weekly cardio and detected activities, all read
+   from HEALTHLOG rows the Google Health pull filled in. Nothing here fetches on
+   render except the intraday heart-rate curve, which is deliberate — see below. */
+
+/* ---- readiness ----
+   NOT a field the API returns. Fitbit's own Daily Readiness Score is a Premium
+   feature and isn't exposed, so this is Aerte's own number and will not match
+   what the Fitbit app shows. Weighting follows the shape the reference dashboard
+   used: HRV against your own baseline dominates, resting HR and sleep quality
+   split the rest.
+
+   Both baselines are a 30-day trailing mean of YOUR values, so the score is
+   meaningless until there's history behind it — on day one hrv == baseline, the
+   ratio is 1.0, and every day reads "normal". It earns its keep after a few
+   weeks, which is why the first pull backfills 90 days. */
+const READY_WINDOW=30;
+
+/* Sleep quality out of 100 from the stage split. Duration carries the most
+   weight because it's the part you can actually act on. */
+function sleepScore(rec){
+  if(!rec) return 0;
+  const deep=+rec.deep||0, rem=+rec.rem||0, light=+rec.light||0, awake=+rec.awake||0;
+  const mins=deep+rem+light;
+  if(!(mins>0)) return 0;
+  const h=mins/60;
+  let dur;
+  if(h>=7&&h<=8.5)      dur=35;
+  else if(h>=6.5)       dur=27+(h-6.5)*16;
+  else if(h>=5)         dur=12+(h-5)*10;
+  else                  dur=Math.max(0,h*2.4);
+  if(h>8.5)             dur=Math.max(28,35-(h-8.5)*4);   // oversleeping isn't a bonus
+  const dp=deep/mins;
+  const deepPts = dp>=0.17 ? 18+Math.min(2,(dp-0.17)*40)
+                : dp>=0.10 ? 10+(dp-0.10)*114 : dp/0.10*10;
+  const rp=rem/mins;
+  const remPts  = rp>=0.20 ? 17+Math.min(3,(rp-0.20)*30)
+                : rp>=0.15 ? 12+(rp-0.15)*100 : rp/0.15*12;
+  const eff     = awake<=5  ? 25
+                : awake<=15 ? 23-(awake-5)*0.2
+                : awake<=30 ? 21-(awake-15)*0.4
+                : Math.max(8,15-(awake-30)*0.2);
+  const raw=dur+deepPts+remPts+eff;
+  /* Compressed above 80 so a perfect night reads ~90 rather than pinning at 100
+     and hiding any further variation. */
+  return Math.min(100,Math.max(0,Math.round(raw<=80?raw:80+(raw-80)*0.5)));
+}
+
+/* Trailing mean of a field over the READY_WINDOW days ending at key, excluding
+   the day itself — comparing a value against a baseline it is part of drags the
+   baseline toward it and flattens the signal. */
+function healthBaseline(field,key){
+  let sum=0,n=0;
+  for(let i=1;i<=READY_WINDOW;i++){
+    const v=+(HEALTHLOG[addDays(key,-i)]||{})[field]||0;
+    if(v>0){ sum+=v; n++; }
+  }
+  return n?{avg:sum/n,n}:{avg:0,n:0};
+}
+
+function readinessFor(key){
+  const rec=HEALTHLOG[key]||{};
+  const hrv=+rec.hrv||0, rhr=+rec.rhr||0;
+  const sScore=sleepScore(rec);
+  const hb=healthBaseline('hrv',key), rb=healthBaseline('rhr',key);
+  if(!hrv&&!rhr&&!sScore) return null;
+
+  let hrvScore=50;
+  if(hrv>0&&hb.avg>0){
+    const r=hrv/hb.avg;
+    hrvScore = r>=1.0 ? 62+Math.min(38,(r-1)*76)
+             : r>=0.8 ? 30+(r-0.8)*160
+             : r>=0.6 ? 10+(r-0.6)*100
+             : Math.max(3,r*17);
+  }
+  let rhrScore=50;
+  if(rhr>0&&rb.avg>0){
+    const r=rb.avg/rhr;                       // >1 means resting HR below baseline, which is good
+    rhrScore = r>=1.0 ? 62+Math.min(38,(r-1)*127)
+             : r>=0.9 ? 30+(r-0.9)*320
+             : r>=0.8 ? 10+(r-0.8)*200
+             : Math.max(3,r*12.5);
+  }
+  const score=Math.round(hrvScore*0.4+rhrScore*0.3+sScore*0.3);
+  return {score:Math.min(100,Math.max(0,score)),
+    hrv,rhr,sleepScore:sScore,
+    hrvScore:Math.round(hrvScore),rhrScore:Math.round(rhrScore),
+    /* How much history the baselines actually rest on, so the card can admit
+       when it's guessing rather than presenting a confident number. */
+    depth:Math.min(hb.n,rb.n)};
+}
+const readyBand=s=>s>=65?{c:'var(--green)',l:'High'}:s>=30?{c:'var(--orange)',l:'Middle'}:{c:'var(--red)',l:'Low'};
+
+/* ---- intraday heart rate: fetched on demand, never stored ----
+   One sample per minute is ~1440 points a day. Ninety days of that is roughly
+   2 MB against a ~5 MB localStorage budget the whole app already shares, and
+   blowing that budget makes unrelated saves start failing. So the curve is
+   pulled for the day you're looking at and kept in memory only; the daily
+   resting HR that IS persisted carries the long-term trend instead. */
+const HR_CACHE=new Map();
+async function ghHeartRate(key){
+  if(HR_CACHE.has(key)) return HR_CACHE.get(key);
+  if(!ghOn()) return null;
+  const tok=await ghAccessToken().catch(()=>'');
+  if(!tok) return null;
+  const out=[];
+  let page='';
+  do{
+    const q=new URLSearchParams({
+      filter:'heart_rate.sample_time.physical_time >= "'+key+'T00:00:00Z" AND '+
+             'heart_rate.sample_time.physical_time < "'+addDays(key,1)+'T00:00:00Z"',
+      page_size:'10000',
+    });
+    if(page) q.set('page_token',page);
+    const j=await ghFetch('/users/me/dataTypes/heart-rate/dataPoints?'+q,tok);
+    (j.dataPoints||[]).forEach(d=>{
+      const h=d.heartRate||{}, t=(h.sampleTime||{}).physicalTime, bpm=+h.beatsPerMinute||0;
+      if(t&&bpm>0) out.push({t:new Date(t).getTime(),bpm});
+    });
+    page=j.nextPageToken||'';
+  }while(page);
+  out.sort((a,b)=>a.t-b.t);
+  HR_CACHE.set(key,out);
+  /* The aggregate is cheap to keep and worth persisting — it survives the
+     session and gives the week view something to draw without refetching. */
+  if(out.length){
+    const b=out.map(p=>p.bpm);
+    if(healthRecord({date:key,hrMin:Math.min(...b),hrMax:Math.max(...b),
+                     hrAvg:b.reduce((x,y)=>x+y,0)/b.length})) saveHealthLog();
+  }
+  return out;
+}
+
+/* ---- the tab ---- */
+let HEALTH_DAY=null, HEALTH_CARDIO='week';
+function healthDay(){ return HEALTH_DAY||todayKey(); }
+
+/* Most recent day at or before key that has the field — a card showing "no HRV"
+   because today's hasn't synced yet is worse than showing last night's. */
+function lastWith(field,key,back){
+  for(let i=0;i<(back||7);i++){
+    const k=addDays(key,-i), v=+(HEALTHLOG[k]||{})[field]||0;
+    if(v>0) return {key:k,v,age:i};
+  }
+  return null;
+}
+const fmtMin=m=>{ m=Math.round(m); return (m>=60?Math.floor(m/60)+'h ':'')+(m%60)+'m'; };
+
+function renderHealth(){
+  const host=document.getElementById('healthBody'); if(!host) return;
+  const key=healthDay();
+
+  if(!ghOn()){
+    host.innerHTML=`<div class="sumcard" style="padding:18px">
+      <div class="hyd-empty" style="margin-bottom:14px">Connect Google Health to see readiness, sleep stages, heart rate and detected workouts from your Fitbit Air.</div>
+      <button class="cta red" id="hvConnect" style="margin-top:0">Set up Google Health</button></div>`;
+    document.getElementById('hvConnect').onclick=openGoogleHealth;
+    return;
+  }
+
+  host.innerHTML=
+    healthDayNavHTML(key)+
+    readyCardHTML(key)+
+    sleepCardHTML(key)+
+    hrCardHTML(key)+
+    cardioCardHTML()+
+    actsCardHTML(key);
+
+  host.querySelectorAll('[data-hday]').forEach(b=>b.onclick=()=>{
+    HEALTH_DAY=addDays(key,+b.dataset.hday); renderHealth();
+  });
+  host.querySelectorAll('[data-hcard]').forEach(b=>b.onclick=()=>{
+    HEALTH_CARDIO=b.dataset.hcard; renderHealth();
+  });
+  const rp=document.getElementById('hvRefresh');
+  if(rp) rp.onclick=()=>{ ghPull(14,true).then(renderHealth).catch(()=>{}); };
+  paintHrCurve(key);
+}
+
+function healthDayNavHTML(key){
+  const isToday=key===todayKey();
+  return `<div class="hyd-head" style="margin-bottom:14px">
+    <div class="hyd-nav"><button data-hday="-1">‹</button></div>
+    <div class="hyd-range">${esc(isToday?'Today':fmtDateKey(key))}</div>
+    <div class="hyd-nav"><button data-hday="1" ${isToday?'disabled':''}>›</button></div>
+  </div>`;
+}
+
+function readyCardHTML(key){
+  const r=readinessFor(key);
+  if(!r) return card('Readiness','Aerte’s own score',
+    `<div class="hyd-empty">No HRV or resting heart rate for this day yet.</div>`);
+  const b=readyBand(r.score);
+  const thin=r.depth<14;
+  return card('Readiness',thin?'baseline still forming':'vs your 30-day baseline',`
+    <div style="display:flex;align-items:center;gap:16px">
+      <div style="font:800 40px/1 var(--font);color:${b.c};min-width:74px">${r.score}</div>
+      <div style="flex:1">
+        <div style="font-weight:700;color:${b.c};margin-bottom:6px">${b.l}</div>
+        ${[['HRV',r.hrvScore,r.hrv?r.hrv.toFixed(0)+' ms':'—'],
+           ['Resting HR',r.rhrScore,r.rhr?r.rhr+' bpm':'—'],
+           ['Sleep',r.sleepScore,r.sleepScore?r.sleepScore+'/100':'—']]
+          .map(([n,sc,v])=>`<div style="display:flex;align-items:center;gap:8px;margin:3px 0">
+            <span style="font-size:11.5px;color:var(--txt-3);width:74px">${n}</span>
+            <span style="flex:1;height:4px;background:var(--fill-track);border-radius:2px;overflow:hidden">
+              <span style="display:block;height:100%;width:${Math.max(2,sc)}%;background:${readyBand(sc).c}"></span></span>
+            <span style="font-size:11.5px;font-weight:700;width:52px;text-align:right">${esc(v)}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+    ${thin?`<p class="mm-note" style="margin-top:12px">Only ${r.depth} day${r.depth===1?'':'s'} of history behind the baseline, so treat this as provisional — it needs about a month to mean anything.</p>`:''}
+    <p class="mm-note">Aerte’s own formula (40% HRV · 30% resting HR · 30% sleep). It won’t match the Fitbit app’s Readiness score.</p>`);
+}
+
+function sleepCardHTML(key){
+  const rec=HEALTHLOG[key]||{};
+  const h=+rec.sleep||0;
+  const deep=+rec.deep||0, rem=+rec.rem||0, light=+rec.light||0, awake=+rec.awake||0;
+  if(!h&&!deep) return card('Sleep','',`<div class="hyd-empty">No sleep recorded for this night.</div>`);
+  const tot=deep+rem+light;
+  const seg=[['Deep',deep,'var(--blue)'],['REM',rem,'var(--purple,#a78bfa)'],
+             ['Light',light,'var(--water-1)'],['Awake',awake,'var(--fill-track)']];
+  const sc=sleepScore(rec);
+  return card('Sleep',h?h.toFixed(2).replace(/\.?0+$/,'')+' h asleep':'',`
+    ${tot>0?`<div style="display:flex;height:12px;border-radius:6px;overflow:hidden;margin-bottom:12px">
+      ${seg.filter(s=>s[1]>0).map(([n,v,c])=>`<span title="${n} ${fmtMin(v)}" style="width:${(v/(tot+awake)*100).toFixed(1)}%;background:${c}"></span>`).join('')}
+    </div>`:''}
+    <div class="hyd-stats">
+      ${seg.map(([n,v])=>`<div><b>${v>0?fmtMin(v):'—'}</b><i>${n.toLowerCase()}</i></div>`).join('')}
+    </div>
+    ${sc?`<div class="hyd-labs" style="margin-top:10px"><span>quality ${sc}/100</span><span>${tot>0?(deep/tot*100).toFixed(0)+'% deep · '+(rem/tot*100).toFixed(0)+'% REM':''}</span></div>`:''}`);
+}
+
+function hrCardHTML(key){
+  const rec=HEALTHLOG[key]||{};
+  const rest=lastWith('rhr',key,7);
+  return card('Heart rate',rest?(rest.age?'resting from '+fmtDateKey(rest.key):'resting '+rest.v+' bpm'):'',`
+    <div id="hrCurve" style="min-height:96px"><div class="hyd-empty">Loading the day’s curve…</div></div>
+    <div class="hyd-stats" style="margin-top:10px">
+      <div><b>${+rec.hrMin||'—'}</b><i>min</i></div>
+      <div><b>${+rec.hrAvg||'—'}</b><i>avg</i></div>
+      <div><b>${+rec.hrMax||'—'}</b><i>max</i></div>
+      <div><b>${rest?rest.v:'—'}</b><i>resting</i></div>
+    </div>`);
+}
+
+/* The curve is the one thing on this tab that costs a network round trip, so it
+   fills in after the card is already on screen rather than holding it up. */
+async function paintHrCurve(key){
+  const host=document.getElementById('hrCurve'); if(!host) return;
+  let pts=null;
+  try{ pts=await ghHeartRate(key); }catch(e){ pts=null; }
+  if(!document.getElementById('hrCurve')||healthDay()!==key) return;   // moved on while we waited
+  if(!pts||!pts.length){
+    host.innerHTML=`<div class="hyd-empty">No heart-rate samples for this day.</div>`; return;
+  }
+  const W=Math.max(200,Math.round(host.clientWidth||320)), H=96, PADY=8;
+  const d0=dateOf(key).setHours(0,0,0,0), span=86400000;
+  const bs=pts.map(p=>p.bpm), lo=Math.min(...bs), hi=Math.max(...bs);
+  const y0=lo-4, y1=hi+4, ys=(y1-y0)||1;
+  const xOf=t=>((t-d0)/span)*W, yOf=v=>PADY+(1-(v-y0)/ys)*(H-PADY*2);
+  /* A day of per-minute samples is more points than the width has pixels, so
+     bucket to roughly one per pixel — the shape is identical and the DOM is
+     three orders of magnitude smaller. */
+  const step=Math.max(1,Math.ceil(pts.length/W));
+  const thin=[]; for(let i=0;i<pts.length;i+=step){
+    const win=pts.slice(i,i+step);
+    thin.push({t:win[0].t,bpm:Math.round(win.reduce((s,p)=>s+p.bpm,0)/win.length)});
+  }
+  const line=thin.map(p=>xOf(p.t).toFixed(1)+','+yOf(p.bpm).toFixed(1)).join(' ');
+  const rest=+(HEALTHLOG[key]||{}).rhr||0;
+  host.innerHTML=`<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;overflow:visible">
+    ${rest>0&&rest>y0&&rest<y1?`<line x1="0" y1="${yOf(rest).toFixed(1)}" x2="${W}" y2="${yOf(rest).toFixed(1)}"
+      stroke="var(--stroke)" stroke-dasharray="3 4"><title>resting ${rest} bpm</title></line>`:''}
+    <polyline points="${line}" fill="none" stroke="var(--red)" stroke-width="1.6"
+      stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <div class="hyd-labs"><span>00:00</span><span>12:00</span><span>24:00</span></div>`;
+}
+
+function cardioCardHTML(){
+  const keys=periodKeys(HEALTH_CARDIO==='week'?'week':'month',0);
+  const azm=keys.reduce((s,k)=>s+(+(HEALTHLOG[k]||{}).azm||0),0);
+  const kcal=keys.reduce((s,k)=>s+(+(HEALTHLOG[k]||{}).kcalOut||0),0);
+  const act=keys.reduce((s,k)=>s+(+(HEALTHLOG[k]||{}).active||0),0);
+  const days=keys.filter(k=>(+(HEALTHLOG[k]||{}).azm||0)>0).length;
+  const vo2=lastWith('vo2',todayKey(),30);
+  const goal=HEALTH_CARDIO==='week'?150:650;      // WHO's 150 active minutes a week
+  const pct=Math.min(100,Math.round(azm/goal*100));
+  const bars=keys.map(k=>{
+    const v=+(HEALTHLOG[k]||{}).azm||0, mx=Math.max(1,...keys.map(x=>+(HEALTHLOG[x]||{}).azm||0));
+    /* An inline height on a zero bar would beat .hyd-bar.zero's 2px track and
+       collapse the day to nothing, which reads as a broken chart rather than as
+       "no data yet" — so zeros carry no inline height at all. */
+    return `<div class="hyd-col"><div class="hyd-bar ${v?'':'zero'}"${v?` style="height:${Math.max(4,v/mx*100)}%"`:''}
+      title="${esc(fmtDateKey(k))} · ${v||0} AZM"></div></div>`;
+  }).join('');
+  return card('Weekly cardio',HEALTH_CARDIO==='week'?'active zone minutes':'this month',`
+    <div class="filt" style="padding:0 0 12px;gap:6px">
+      ${[['week','Week'],['month','Month']].map(([v,l])=>
+        `<button data-hcard="${v}" class="${HEALTH_CARDIO===v?'on':''}">${l}</button>`).join('')}
+    </div>
+    <div class="hyd-chart" style="height:78px">${bars}</div>
+    <div class="hyd-labs" style="margin-top:8px"><span>${azm} AZM</span><span>${pct}% of ${goal}</span></div>
+    <div class="hyd-stats" style="margin-top:10px">
+      <div><b>${azm||'—'}</b><i>zone min</i></div>
+      <div><b>${act||'—'}</b><i>active min</i></div>
+      <div><b>${kcal?Math.round(kcal).toLocaleString():'—'}</b><i>kcal out</i></div>
+      <div><b>${vo2?vo2.v.toFixed(1):'—'}</b><i>VO₂ max</i></div>
+    </div>
+    ${days?'':`<p class="mm-note">No zone minutes in this ${HEALTH_CARDIO}.</p>`}`);
+}
+
+const ACT_ICON={RUNNING:'\u{1F3C3}',WALKING:'\u{1F6B6}',BIKING:'\u{1F6B4}',SWIMMING:'\u{1F3CA}',
+  HIKING:'\u{1F97E}',YOGA:'\u{1F9D8}',PILATES:'\u{1F9D8}',HIIT:'⚡',WEIGHTLIFTING:'\u{1F3CB}',
+  STRENGTH_TRAINING:'\u{1F3CB}',WORKOUT:'\u{1F4AA}',OTHER:'•'};
+function actsCardHTML(key){
+  const acts=(HEALTHLOG[key]||{}).acts||[];
+  if(!acts.length) return card('Activities','detected',
+    `<div class="hyd-empty">No workouts detected on this day.</div>`);
+  return card('Activities',acts.length+' detected',
+    acts.map(a=>{
+      const t=a.at?new Date(a.at).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}):'';
+      const bits=[a.sec?fmtMin(a.sec/60):'',a.km?a.km+' km':'',a.kcal?a.kcal+' kcal':'',
+                  a.hr?a.hr+' bpm avg':'',a.azm?a.azm+' AZM':''].filter(Boolean);
+      return `<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--stroke)">
+        <span style="font-size:20px;line-height:1.2">${ACT_ICON[a.t]||ACT_ICON.OTHER}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:14px">${esc(a.n)}${a.man?' <span style="font-weight:500;font-size:11px;color:var(--txt-3)">manual</span>':''}</div>
+          <div style="font-size:11.5px;color:var(--txt-3);margin-top:2px">${esc(bits.join(' · '))}</div>
+        </div>
+        <span style="font-size:11.5px;color:var(--txt-3)">${esc(t)}</span>
+      </div>`;
+    }).join(''));
+}
+
+/* Shared chrome so the five cards stay visually one family. */
+function card(title,sub,body){
+  return `<div class="month-row" style="margin-top:20px"><h2>${esc(title)}</h2>${sub?`<span class="sub">${esc(sub)}</span>`:''}</div>
+    <div class="sumcard" style="padding:16px">${body}</div>`;
 }
 
 /* ---- chart: weight is continuous, so a line rather than the water bars ---- */
@@ -4607,9 +5438,11 @@ function renderProfileSettings(){
     <div class="totalsbar" id="profPreview"></div>
     <button class="cta red" id="saveProfile">Save profile</button>
     <button class="cta ghost" id="openSync">☁︎ Cross-device sync${syncOn()?' · on':''}</button>
+    <button class="cta ghost" id="openGH">⌚︎ Google Health${ghOn()?' · on':''}</button>
     <button class="cta ghost" id="openDev">⚙︎ Enter developer mode</button>`;
   document.getElementById('openDev').onclick=()=>{closeSheet();setDevMode(true);};
   document.getElementById('openSync').onclick=openSyncSettings;
+  document.getElementById('openGH').onclick=openGoogleHealth;
   function updatePreview(){
     const w=+document.getElementById('pWeight').value||PROFILE.weight,h=+document.getElementById('pHeight').value||PROFILE.height,a=+document.getElementById('pAge').value||PROFILE.age,sx=document.getElementById('pSex').value,goal=document.getElementById('pGoal').value;
     const b=sx==='male'?(10*w+6.25*h-5*a+5):(10*w+6.25*h-5*a-161);
@@ -7323,6 +8156,7 @@ function openDevTools(){
     <button class="cta ghost" id="devImport">⬆︎ Import data from file</button>
     <button class="cta ghost" id="devNotes">✎ Export daily notes (PDF / Word)</button>
     <button class="cta ghost" id="devSync">☁︎ Cross-device sync${syncOn()?' · on':' · off'}</button>
+    <button class="cta ghost" id="devGH">⌚︎ Google Health${ghOn()?' · on':' · off'}</button>
     <input type="file" id="devFile" accept="application/json" style="display:none">
     <div class="dev-danger">
       <div class="sec-lab" style="margin-top:18px;color:var(--red)">Danger zone</div>
@@ -7335,6 +8169,7 @@ function openDevTools(){
   document.getElementById('devImport').onclick=()=>document.getElementById('devFile').click();
   document.getElementById('devNotes').onclick=openNotesExport;
   document.getElementById('devSync').onclick=openSyncSettings;
+  { const g=document.getElementById('devGH'); if(g) g.onclick=openGoogleHealth; }
   document.getElementById('devFile').onchange=devImport;
   document.getElementById('devResetStreak').onclick=devResetStreak;
   document.getElementById('devReseed').onclick=devReseed;
@@ -7968,6 +8803,7 @@ document.addEventListener('visibilitychange',()=>{
   /* Drain the scale inbox on its own throttle, independent of the sync gate —
      a weigh-in should land even with auto-sync switched off. */
   weightDrainInbox(false).catch(()=>{});
+  ghAutoPull('focus');
   if(!syncOn()||SYNC_CFG.auto===false||SYNC_QUIET) return;
   if(Date.now()-_syncLastFocus<SYNC_FOCUS_GAP) return;
   _syncLastFocus=Date.now();
@@ -8004,10 +8840,13 @@ document.querySelectorAll('#foodFilt [data-food]').forEach(b=>b.onclick=()=>show
 segBtns.forEach(b=>b.onclick=()=>{
   segBtns.forEach(x=>x.classList.remove('on'));b.classList.add('on');moveGlider(b);
   const t=b.dataset.tab;
-  ['week','training','food','shop'].forEach(name=>{const el=document.getElementById('tab-'+name);if(el)el.classList.toggle('hide',t!==name);});
+  ['week','training','food','shop','health'].forEach(name=>{const el=document.getElementById('tab-'+name);if(el)el.classList.toggle('hide',t!==name);});
   if(t==='shop')renderShop();
   if(t==='training'){renderTrainWeek();renderLib();renderBodyMap();}
   if(t==='food')showFood(activeFood);
+  /* Health renders from HEALTHLOG, so opening the tab is cheap; only the
+     intraday heart-rate curve reaches the network, and it does that on its own. */
+  if(t==='health')renderHealth();
 });
 
 /* ============ WEEK NAV ============ */
@@ -8044,7 +8883,11 @@ document.getElementById('seqClose').onclick=()=>closeSeq(true);
   loadTiers();
   /* After the loaders, so HEALTHLOG and PROFILE exist to write into. Both are
      fire-and-forget: a failed inbox read must never block the app starting. */
-  setTimeout(()=>{ weightFromURL().catch(()=>{}); weightDrainInbox(true).catch(()=>{}); },0);
+  loadGH();
+  setTimeout(()=>{ weightFromURL().catch(()=>{}); weightDrainInbox(true).catch(()=>{});
+    /* ghFromURL first: it consumes ?code= and, when there isn't one, costs a
+       URLSearchParams lookup. Only then is an auto-pull worth attempting. */
+    ghFromURL().then(()=>ghAutoPull('boot')).catch(()=>{}); },0);
   loadSymbols();
   loadBadges();
   // test/debug hook — lets a harness inspect internals without changing behaviour
@@ -8067,6 +8910,12 @@ document.getElementById('seqClose').onclick=()=>closeSeq(true);
     sym,loadSymbols,saveSymbols,openDevUI,openExercise,openDay,openDevTools,devResetStreak,loadBadges,saveBadges,badgeSVG,setDevMode,openBadgeEditor,stripDecorations,get BADGE_OVERRIDES(){return BADGE_OVERRIDES;},set BADGE_OVERRIDES(v){BADGE_OVERRIDES=v;},get WDONE(){return WDONE;},saveWDone,get PLAN(){return PLAN;},savePlan,todayKey,addDays,ensureDay,dayTotals,renderStreakCard,openProfileHub,computeUnifiedStreak,get SYM_OVERRIDES(){return SYM_OVERRIDES;},set SYM_OVERRIDES(v){SYM_OVERRIDES=v;},SYM_DEFAULTS:()=>SYM_DEFAULTS,renderProgressExtras,ACHIEVEMENTS:()=>ACHIEVEMENTS,
     ALL_STORE_KEYS:()=>ALL_STORE_KEYS,gget,gset,gdel,getSchema,SCHEMA_VERSION,
     openSyncSettings,syncNow,syncPayload,syncApply,syncSig,syncTouch,loadSync,saveSyncState,saveSyncCfg,
+    openGoogleHealth,ghPull,ghOn,ghKeyOf,ghRedirectUri,ghAutoPull,loadGH,
+    renderHealth,readinessFor,sleepScore,healthBaseline,ghHeartRate,healthRecord,
+    get HEALTH_DAY(){return HEALTH_DAY;},set HEALTH_DAY(v){HEALTH_DAY=v;},
+    get HEALTHLOG(){return HEALTHLOG;},set HEALTHLOG(v){HEALTHLOG=v;},saveHealthLog,
+    get GH_CFG(){return GH_CFG;},set GH_CFG(v){GH_CFG=v;},
+    get GH_ST(){return GH_ST;},get GH_STATUS(){return GH_STATUS;},
     get SYNC_CFG(){return SYNC_CFG;},set SYNC_CFG(v){SYNC_CFG=v;},
     get SYNC_ST(){return SYNC_ST;},set SYNC_ST(v){SYNC_ST=v;},
     get SYNC_STATUS(){return SYNC_STATUS;},set SYNC_STATUS(v){SYNC_STATUS=v;},
