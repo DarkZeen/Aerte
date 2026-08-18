@@ -1912,6 +1912,13 @@ function muscleStack(keys){
 let LIB=[],WPLAN={},WDONE={},WNOTES={};
 let seqState=null,seqInterval=null;
 let PRs=[],PROGRESS={start:{bodyfat:'',waist:'',muscle:'',weight:''},current:{bodyfat:'',waist:'',muscle:''}};
+/* One dated row per day of everything Apple Health feeds us:
+   {'YYYY-MM-DD': {kg?, fat?, muscle?, steps?, sleep?, active?, src}}
+   PROGRESS only ever held a start and a current value — two points, which is why
+   a weight-over-time chart was impossible before this existed. Steps and sleep
+   share the row rather than getting their own store: they arrive together from
+   the same Shortcut and are read together on the same screens. */
+let HEALTHLOG={};
 let CYCLE_START=null;           // YYYY-MM-DD the rotation is anchored to
 let currentDayKey=null;         // day sheet context
 let libFilter='all',libQ='';
@@ -1944,7 +1951,7 @@ const saveLib      =()=>gset('aerte5_lib',JSON.stringify(LIB));
    than relying on this file's in-memory globals (RECIPES, PLAN, ...), since
    runMigrations() runs before those globals are populated. */
 const SCHEMA_KEY='aerte_schema';
-const SCHEMA_VERSION=2;
+const SCHEMA_VERSION=3;
 const MIGRATIONS=[
   function(){ /* v1 baseline — nothing to do yet */ },
   /* v2 — repair recipe ingredient amounts inflated by the migration-ordering
@@ -1986,6 +1993,20 @@ const MIGRATIONS=[
     });
     if(fixed){ gset('meal_recipes',JSON.stringify(recipes)); }
   },
+  /* v3 — seed the new dated weight log from the single weight the profile
+     already holds, so the chart opens with a point instead of an empty frame.
+     Adding the key alone needs no migration; seeding it is a data change, so it
+     belongs on the ladder rather than in an ad-hoc boot check. */
+  function(){
+    const wl=gget('aerte5_healthlog');
+    if(wl){ try{ if(Object.keys(JSON.parse(wl.value)||{}).length) return; }catch(e){} }
+    const pr=gget('meal_profile'); if(!pr) return;
+    let prof; try{ prof=JSON.parse(pr.value); }catch(e){ return; }
+    const kg=+(prof&&prof.weight);
+    if(!(kg>0)) return;
+    const d=new Date(), k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    gset('aerte5_healthlog',JSON.stringify({[k]:{kg,src:'profile'}}));
+  },
 ];
 function getSchema(){ const r=gget(SCHEMA_KEY); return r?(parseInt(r.value,10)||0):0; }
 function setSchema(v){ gset(SCHEMA_KEY,String(v)); }
@@ -2015,7 +2036,7 @@ const ALL_STORE_KEYS=[
   'aerte5_fx','aerte5_lib','aerte5_mmap','aerte5_mpick','aerte5_msvg','aerte5_pick',
   'aerte5_progress','aerte5_prs','aerte5_stretch_done','aerte5_stretch_list',
   'aerte5_symbols','aerte5_tiers','aerte5_warmup_done','aerte5_warmup_list',
-  'aerte5_wdone','aerte5_wnotes','aerte5_wplan',
+  'aerte5_healthlog','aerte5_wdone','aerte5_wnotes','aerte5_wplan',
   'meal_baseunit_migrated','meal_cottage_restored','meal_fridge','meal_plan',
   'meal_products','meal_products_v3','meal_profile','meal_recipe_amounts_v2',
   'meal_recipes','meal_shopbuy','meal_shopcustom','meal_shopdismiss','meal_shopnotes',
@@ -2026,6 +2047,7 @@ const ALL_STORE_KEYS=[
 const saveWPlan    =()=>gset('aerte5_wplan',JSON.stringify(WPLAN));
 const saveWDone    =()=>gset('aerte5_wdone',JSON.stringify(WDONE));
 const saveWNotes   =()=>gset('aerte5_wnotes',JSON.stringify(WNOTES));
+const saveHealthLog=()=>gset('aerte5_healthlog',JSON.stringify(HEALTHLOG));
 const saveMsvg     =()=>gset('aerte5_msvg',JSON.stringify(MSVG));
 const saveMpick    =()=>gset('aerte5_mpick',JSON.stringify(MPICK));
 const saveBmap     =()=>gset('aerte5_bmap',JSON.stringify(BMAP));
@@ -2077,6 +2099,7 @@ function loadTraining(){
   r=gget('aerte5_prs');      PRs=r?JSON.parse(r.value):JSON.parse(JSON.stringify(PR_SEED));
   if(!PRs.length)PRs=JSON.parse(JSON.stringify(PR_SEED));
   r=gget('aerte5_progress'); if(r)PROGRESS=JSON.parse(r.value);
+  r=gget('aerte5_healthlog'); HEALTHLOG=r?JSON.parse(r.value):{};
 
   // migrate legacy PROGRESS shape ({day1:{...}}) → {start:{...}}
   if(PROGRESS.day1&&!PROGRESS.start){PROGRESS.start=PROGRESS.day1;delete PROGRESS.day1;}
@@ -3085,6 +3108,330 @@ function openProductEditor(id,opts){
   const d=document.getElementById('qDel');if(d)d.onclick=async()=>{PRODUCTS=PRODUCTS.filter(x=>x.id!==id);await saveProducts();closeSheet();renderProdGrid();};
   document.getElementById('qCancel').onclick=opts.returnTo==='shopPicker'?openProductToShopPicker:closeSheet;
 }
+/* ============ BODY WEIGHT INTAKE ============
+   A web page cannot read HealthKit and iOS Safari has no Web Bluetooth, so the
+   scale cannot be reached directly from here. The bridge is Shortcuts:
+
+     Xiaomi scale -> Zepp Life -> Apple Health -> Shortcuts -> Aerte
+
+   Two ways in, both free and neither needing a native app:
+
+   1. URL     — the Shortcut opens Aerte with ?w=74.8 . Zero setup, works with
+                sync off, but brings the app to the foreground.
+   2. Gist    — the Shortcut PATCHes aerte-inbox.json in the sync gist; Aerte
+                drains it on boot and focus. Silent, needs sync configured.
+
+   The inbox is a SEPARATE file from aerte-data.json and is only ever read and
+   cleared here — never merged through syncNow(). Writing it cannot disturb the
+   sync signature either, since syncSig() is computed from the data file's own
+   updatedAt and length, not the gist's timestamp. */
+const WEIGHT_INBOX_FILE='aerte-inbox.json';
+
+function weightRecord(entry,src){
+  const kg=+entry.kg||0; if(!(kg>0)||kg>500) return false;      // reject nonsense
+  const key=/^\d{4}-\d{2}-\d{2}$/.test(entry.date||'')?entry.date:todayKey();
+  const rec=Object.assign({},HEALTHLOG[key],{kg:+kg.toFixed(2),src:src||'manual'});
+  if(+entry.fat>0)    rec.fat=+(+entry.fat).toFixed(1);
+  if(+entry.muscle>0) rec.muscle=+(+entry.muscle).toFixed(1);
+  HEALTHLOG[key]=rec;
+  return true;
+}
+
+/* Steps and sleep merge into the same dated row rather than replacing it — a
+   weigh-in and a step count for the same day must not overwrite each other. */
+function healthRecord(entry){
+  const key=/^\d{4}-\d{2}-\d{2}$/.test(entry.date||'')?entry.date:todayKey();
+  const steps=Math.round(+entry.steps||0);
+  const sleep=+entry.sleep||0;
+  const active=Math.round(+entry.active||0);
+  /* Bounds are sanity checks, not medicine: a Shortcut that grabs the wrong
+     sample can send a month's steps as one day, and 30h of sleep is a parse
+     error rather than a lie-in. */
+  const ok_s=steps>0&&steps<200000, ok_z=sleep>0&&sleep<=24, ok_a=active>0&&active<20000;
+  if(!ok_s&&!ok_z&&!ok_a) return false;
+  const rec=Object.assign({},HEALTHLOG[key]);
+  if(ok_s) rec.steps=steps;
+  if(ok_z) rec.sleep=+sleep.toFixed(2);
+  if(ok_a) rec.active=active;
+  rec.src=rec.src||'health';
+  HEALTHLOG[key]=rec;
+  return true;
+}
+
+/* The newest reading is the one the calorie targets should use — a profile
+   weight edited months ago quietly skews every day's target. */
+function weightSyncProfile(){
+  const keys=Object.keys(HEALTHLOG).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  if(!keys.length) return false;
+  const latest=HEALTHLOG[keys[keys.length-1]];
+  if(!latest||!(+latest.kg>0)) return false;
+  if(+PROFILE.weight===+latest.kg) return false;
+  PROFILE.weight=+latest.kg;
+  if(latest.fat!=null)    PROGRESS.current.bodyfat=latest.fat;
+  if(latest.muscle!=null) PROGRESS.current.muscle=latest.muscle;
+  return true;
+}
+
+async function weightCommit(n,src){
+  if(!n) return 0;
+  saveHealthLog();
+  if(weightSyncProfile()){ await saveProfile(); saveProgress(); }
+  return n;
+}
+
+/* ---- path 1: ?w=74.8&f=15.2&m=58.1&d=2026-08-18 ---- */
+async function weightFromURL(){
+  const q=new URLSearchParams(location.search);
+  if(!q.has('w')&&!q.has('s')&&!q.has('z')) return 0;
+  let n=0;
+  if(q.has('w')&&weightRecord({kg:q.get('w'),fat:q.get('f'),muscle:q.get('m'),date:q.get('d')},'shortcut')) n++;
+  if((q.has('s')||q.has('z'))&&healthRecord({steps:q.get('s'),sleep:q.get('z'),active:q.get('a'),date:q.get('d')})) n++;
+  n=await weightCommit(n,'shortcut');
+  /* Strip the parameters so a refresh doesn't look like a second weigh-in and
+     the number isn't left sitting in the address bar. */
+  try{ history.replaceState(null,'',location.pathname); }catch(e){}
+  if(n){
+    const bits=[];
+    if(q.has('w')) bits.push((+q.get('w')).toFixed(1)+' kg');
+    if(q.has('s')) bits.push((+q.get('s')).toLocaleString()+' steps');
+    if(q.has('z')) bits.push((+q.get('z')).toFixed(1)+' h sleep');
+    toast('Recorded — '+bits.join(' · '));
+  } else toast('Those values looked wrong — ignored');
+  return n;
+}
+
+/* ---- path 2: drain aerte-inbox.json ---- */
+let _wInboxT=0;
+async function weightDrainInbox(force){
+  if(!syncOn()) return 0;
+  if(!force && Date.now()-_wInboxT<60000) return 0;   // focus fires often
+  _wInboxT=Date.now();
+  let gist;
+  try{
+    const res=await fetch(SYNC_API+'/'+encodeURIComponent(SYNC_CFG.gistId),
+      {method:'GET',headers:syncHeaders(),cache:'no-store'});
+    if(!res.ok) return 0;
+    gist=await res.json();
+  }catch(e){ return 0; }
+  const f=(gist.files||{})[WEIGHT_INBOX_FILE];
+  if(!f||!f.content) return 0;
+  let box; try{ box=JSON.parse(f.content); }catch(e){ return 0; }
+  const rows=Array.isArray(box.weight)?box.weight:[];
+  const hrows=Array.isArray(box.health)?box.health:[];
+  if(!rows.length&&!hrows.length) return 0;
+
+  /* Shortcuts sends an ISO timestamp; the log is keyed by local date. */
+  const dateOfRow=r=>{
+    if(r.date) return r.date;
+    if(r.at){ const d=new Date(r.at); if(!isNaN(d)) return keyOf(d); }
+    return null;
+  };
+  let n=0;
+  rows.forEach(r=>{
+    if(!r) return;
+    if(weightRecord({kg:r.kg,fat:r.fat,muscle:r.muscle,date:dateOfRow(r)},'scale')) n++;
+  });
+  hrows.forEach(r=>{
+    if(!r) return;
+    if(healthRecord({steps:r.steps,sleep:r.sleep,active:r.active,date:dateOfRow(r)})) n++;
+  });
+  if(!n) return 0;
+  await weightCommit(n,'scale');
+
+  /* Clear only after a successful local write, so a failure here means the
+     reading is retried next time rather than lost. */
+  try{
+    await fetch(SYNC_API+'/'+encodeURIComponent(SYNC_CFG.gistId),{
+      method:'PATCH',headers:syncHeaders({'Content-Type':'application/json'}),
+      body:JSON.stringify({files:{[WEIGHT_INBOX_FILE]:{content:'{"weight":[]}'}}})
+    });
+  }catch(e){}
+  toast(n===1?'1 reading from Apple Health':n+' readings from Apple Health');
+  try{ renderStats&&renderStats('statsBody'); renderProgressExtras&&renderProgressExtras(); }catch(e){}
+  return n;
+}
+
+/* ---- chart: weight is continuous, so a line rather than the water bars ---- */
+let WT_PERIOD='month', WT_OFF=0;
+function weightSeries(period,off){
+  return periodKeys(period,off).map(k=>({key:k,kg:(HEALTHLOG[k]&&+HEALTHLOG[k].kg)||null}))
+    .filter(p=>p.kg>0);
+}
+function renderWeightCard(){
+  const host=document.getElementById('wtBody'); if(!host) return;
+  const pts=weightSeries(WT_PERIOD,WT_OFF);
+  if(pts.length<1){
+    host.innerHTML=`<div class="hyd-empty">No weigh-ins in this ${WT_PERIOD}.</div>`; return;
+  }
+  /* Drawn in real pixel coordinates rather than a 0..100 box stretched with
+     preserveAspectRatio="none": that stretch scales x and y unequally, which
+     turns every dot into a fat ellipse and makes a year of readings an
+     unreadable blob. Width is measured, so the circles stay circular. */
+  const W=Math.max(200,Math.round(host.clientWidth||320)), H=120, PADX=6, PADY=10;
+  const kgs=pts.map(p=>p.kg);
+  const lo=Math.min(...kgs), hi=Math.max(...kgs);
+  const pad=Math.max(0.4,(hi-lo)*0.18), y0=lo-pad, y1=hi+pad, span=(y1-y0)||1;
+  const keys=periodKeys(WT_PERIOD,WT_OFF), lastIdx=Math.max(1,keys.length-1);
+  const xOf=k=>PADX+(keys.indexOf(k)/lastIdx)*(W-PADX*2);
+  const yOf=v=>PADY+(1-(v-y0)/span)*(H-PADY*2);
+  const line=pts.map(p=>`${xOf(p.key).toFixed(1)},${yOf(p.kg).toFixed(1)}`).join(' ');
+  /* A year can hold 100+ readings; past ~24 the dots merge into the line and
+     only the endpoints stay useful. */
+  const dots=pts.length<=24?pts:[pts[0],pts[pts.length-1]];
+  const first=pts[0].kg, last=pts[pts.length-1].kg, delta=+(last-first).toFixed(1);
+  const dCol=delta===0?'var(--txt-3)':(delta<0?'var(--green)':'var(--orange)');
+  host.innerHTML=`
+    <svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;overflow:visible">
+      <line x1="${PADX}" y1="${yOf(hi).toFixed(1)}" x2="${W-PADX}" y2="${yOf(hi).toFixed(1)}"
+        stroke="var(--stroke)" stroke-dasharray="3 4"/>
+      <line x1="${PADX}" y1="${yOf(lo).toFixed(1)}" x2="${W-PADX}" y2="${yOf(lo).toFixed(1)}"
+        stroke="var(--stroke)" stroke-dasharray="3 4"/>
+      ${pts.length>1?`<polyline points="${line}" fill="none" stroke="var(--blue)" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round"/>`:''}
+      ${dots.map(p=>`<circle cx="${xOf(p.key).toFixed(1)}" cy="${yOf(p.kg).toFixed(1)}" r="3.2"
+        fill="var(--bg-1)" stroke="var(--blue)" stroke-width="2"
+        ><title>${esc(fmtDateKey(p.key))} · ${p.kg} kg</title></circle>`).join('')}
+    </svg>
+    <div class="hyd-labs" style="margin-top:8px"><span>${lo.toFixed(1)} kg low</span><span>${hi.toFixed(1)} kg high</span></div>
+    <div class="hyd-stats">
+      <div><b>${last.toFixed(1)}</b><i>latest kg</i></div>
+      <div><b style="color:${dCol}">${delta>0?'+':''}${delta}</b><i>change</i></div>
+      <div><b>${pts.length}</b><i>weigh-ins</i></div>
+    </div>`;
+}
+/* ---- steps & sleep: same bar chart language as hydration ---- */
+let ACT_PERIOD='week', ACT_OFF=0, ACT_METRIC='steps';
+const ACT_META={
+  steps:{label:'Steps', goal:8000,  fmt:v=>Math.round(v).toLocaleString(), unit:'',  avg:'avg steps'},
+  sleep:{label:'Sleep', goal:8,     fmt:v=>(+v).toFixed(1),                unit:'h', avg:'avg hours'}
+};
+function renderActivity(){
+  const host=document.getElementById('actBody'); if(!host) return;
+  const m=ACT_META[ACT_METRIC], keys=periodKeys(ACT_PERIOD,ACT_OFF);
+  let bars;
+  if(ACT_PERIOD==='year'){
+    const by={};
+    keys.forEach(k=>{ const v=HEALTHLOG[k]&&+HEALTHLOG[k][ACT_METRIC]; if(v>0)(by[+k.slice(5,7)-1]=by[+k.slice(5,7)-1]||[]).push(v); });
+    bars=Array.from({length:12},(_,i)=>{
+      const a=by[i]||[]; const avg=a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+      return {v:avg,on:a.length>0,lab:'JFMAMJJASOND'[i],hi:false,
+              tip:`${new Date(2000,i,1).toLocaleDateString(undefined,{month:'long'})} · ${a.length?m.fmt(avg)+m.unit+' avg':'no data'}`};
+    });
+  } else {
+    const wk=['M','T','W','T','F','S','S'];
+    bars=keys.map((k,i)=>{
+      const v=(HEALTHLOG[k]&&+HEALTHLOG[k][ACT_METRIC])||0, d=dateOf(k), dn=d.getDate();
+      const lab=ACT_PERIOD==='week'?wk[i]:((i===0||dn%5===0)?String(dn):'');
+      return {v,on:v>0,lab,hi:k===todayKey(),tip:`${fmtDateKey(k)} · ${v>0?m.fmt(v)+m.unit:'no data'}`};
+    });
+  }
+  const live=bars.filter(b=>b.on);
+  if(!live.length){ host.innerHTML=`<div class="hyd-empty">No ${m.label.toLowerCase()} recorded in this ${ACT_PERIOD}.</div>`; return; }
+  const scale=Math.max(m.goal,...bars.map(b=>b.v));
+  const gap=ACT_PERIOD==='month'?2:(ACT_PERIOD==='year'?6:7);
+  const vals=live.map(b=>b.v), avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+  const best=Math.max(...vals), hits=vals.filter(v=>v>=m.goal).length;
+
+  let h=`<div class="hyd-chart" style="--hyd-gap:${gap}px">
+    <div class="hyd-goal" style="bottom:${(m.goal/scale*100).toFixed(1)}%"><span>goal ${m.fmt(m.goal)}${m.unit}</span></div>`;
+  bars.forEach(b=>{
+    const cls=(!b.on?'gap':'')+(b.hi?' today':'');
+    const pct=b.on&&b.v>0?Math.max(3,b.v/scale*100):0;
+    h+=`<div class="hyd-col" title="${esc(b.tip)}"><div class="hyd-bar ${cls}" data-h="${pct.toFixed(1)}"${b.on&&b.v>0?' style="height:0"':''}></div></div>`;
+  });
+  h+=`</div><div class="hyd-labs">`;
+  bars.forEach(b=>{ h+=`<span class="${b.hi?'hi':''}">${b.lab}</span>`; });
+  h+=`</div><div class="hyd-stats">
+      <div><b>${m.fmt(avg)}${m.unit}</b><i>${m.avg}</i></div>
+      <div><b>${m.fmt(best)}${m.unit}</b><i>best</i></div>
+      <div><b>${hits}<span style="color:var(--txt-3);font-size:12px">/${live.length}</span></b><i>goal days</i></div>
+    </div>`;
+  host.innerHTML=h;
+  const grow=()=>host.querySelectorAll('.hyd-bar[data-h]').forEach(el=>{el.style.height=el.dataset.h+'%';});
+  if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches) grow();
+  else requestAnimationFrame(()=>requestAnimationFrame(grow));
+}
+function activityCardHTML(){
+  const keys=Object.keys(HEALTHLOG).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  const first=keys[0]||todayKey(), pk=periodKeys(ACT_PERIOD,ACT_OFF);
+  return `<div class="month-row" style="margin-top:22px"><h2>Steps &amp; sleep</h2>
+      <div class="filt" style="padding:0;gap:6px">
+        ${['steps','sleep'].map(k=>`<button data-am="${k}" class="${ACT_METRIC===k?'on':''}">${ACT_META[k].label}</button>`).join('')}
+      </div></div>
+    <div class="filt" style="padding:0 0 10px;gap:6px">
+      ${['week','month','year'].map(p=>`<button data-ap="${p}" class="${ACT_PERIOD===p?'on':''}">${cap(p)}</button>`).join('')}
+    </div>
+    <div class="sumcard" style="padding:16px">
+      <div class="hyd-head">
+        <div class="hyd-nav"><button id="actPrev" ${pk[pk.length-1]<first?'disabled':''}>‹</button></div>
+        <div class="hyd-range">${esc(periodLabel(ACT_PERIOD,ACT_OFF))}</div>
+        <div class="hyd-nav"><button id="actNext" ${ACT_OFF>=0?'disabled':''}>›</button></div>
+      </div>
+      <div id="actBody"></div>
+    </div>`;
+}
+function paintActivityCard(){
+  const c=document.getElementById('actCard'); if(!c) return;
+  c.innerHTML=activityCardHTML();
+  c.querySelectorAll('[data-am]').forEach(b=>b.onclick=()=>{ if(ACT_METRIC===b.dataset.am)return; ACT_METRIC=b.dataset.am; paintActivityCard(); });
+  c.querySelectorAll('[data-ap]').forEach(b=>b.onclick=()=>{ if(ACT_PERIOD===b.dataset.ap)return; ACT_PERIOD=b.dataset.ap; ACT_OFF=0; paintActivityCard(); });
+  const p=document.getElementById('actPrev'), n=document.getElementById('actNext');
+  if(p) p.onclick=()=>{ ACT_OFF--; paintActivityCard(); };
+  if(n) n.onclick=()=>{ ACT_OFF++; paintActivityCard(); };
+  renderActivity();
+}
+
+function weightCardHTML(){
+  const keys=Object.keys(HEALTHLOG).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  const first=keys[0]||todayKey();
+  const pk=periodKeys(WT_PERIOD,WT_OFF);
+  return `<div class="month-row" style="margin-top:22px"><h2>Weight</h2>
+      <div class="filt" style="padding:0;gap:6px">
+        ${['week','month','year'].map(p=>`<button data-wp="${p}" class="${WT_PERIOD===p?'on':''}">${cap(p)}</button>`).join('')}
+      </div></div>
+    <div class="sumcard" style="padding:16px">
+      <div class="hyd-head">
+        <div class="hyd-nav"><button id="wtPrev" ${pk[pk.length-1]<first?'disabled':''}>‹</button></div>
+        <div class="hyd-range">${esc(periodLabel(WT_PERIOD,WT_OFF))}</div>
+        <div class="hyd-nav"><button id="wtNext" ${WT_OFF>=0?'disabled':''}>›</button></div>
+      </div>
+      <div id="wtBody"></div>
+      <button class="cta ghost" id="wtAdd" style="margin-top:12px">+ Log today's weight</button>
+    </div>`;
+}
+function paintWeightCard(){
+  const c=document.getElementById('wtCard'); if(!c) return;
+  c.innerHTML=weightCardHTML();
+  c.querySelectorAll('[data-wp]').forEach(b=>b.onclick=()=>{ if(WT_PERIOD===b.dataset.wp)return; WT_PERIOD=b.dataset.wp; WT_OFF=0; paintWeightCard(); });
+  const p=document.getElementById('wtPrev'), n=document.getElementById('wtNext');
+  if(p) p.onclick=()=>{ WT_OFF--; paintWeightCard(); };
+  if(n) n.onclick=()=>{ WT_OFF++; paintWeightCard(); };
+  document.getElementById('wtAdd').onclick=openWeightEntry;
+  renderWeightCard();
+}
+function openWeightEntry(){
+  const cur=HEALTHLOG[todayKey()]||{};
+  openSheet(`<h3>Today's weight</h3><div class="meta">${esc(fmtDateKey(todayKey()))}</div>
+    <div class="field" style="margin-top:14px"><label>Weight (kg)</label>
+      <input id="weKg" type="number" step="0.1" inputmode="decimal" value="${cur.kg||PROFILE.weight||''}"></div>
+    <div class="field2"><div class="field" style="margin-top:0"><label>Body fat %</label>
+      <input id="weFat" type="number" step="0.1" value="${cur.fat!=null?cur.fat:''}"></div>
+      <div class="field" style="margin-top:0"><label>Muscle kg</label>
+      <input id="weMus" type="number" step="0.1" value="${cur.muscle!=null?cur.muscle:''}"></div></div>
+    <p style="font-size:11px;color:var(--txt-3);margin:10px 2px 0;line-height:1.5">Saving updates your profile weight, so your calorie targets follow the scale.</p>
+    <button class="cta red" id="weSave">Save</button>
+    <button class="cta ghost" id="weCancel">Cancel</button>`);
+  document.getElementById('weSave').onclick=async()=>{
+    const ok=weightRecord({kg:document.getElementById('weKg').value,
+      fat:document.getElementById('weFat').value,
+      muscle:document.getElementById('weMus').value},'manual');
+    if(!ok){ toast('Enter a weight in kg'); return; }
+    await weightCommit(1,'manual');
+    closeSheet(); paintWeightCard(); renderAll(); toast('Weight saved');
+  };
+  document.getElementById('weCancel').onclick=closeSheet;
+}
+
 /* ============ SNAP — photograph food, Claude reads the macros ============
    The barcode path covers anything with a label. Snap covers what doesn't have
    one: a plate of Mum's cooking, loose bakery items, a handwritten menu.
@@ -4199,6 +4546,8 @@ function renderProgressExtras(){
 
   // Hydration graph — painted after innerHTML so it can repaint itself on period change
   html+=`<div data-sec="hyd" id="hydCard"></div>`;
+  html+=`<div data-sec="wt" id="wtCard"></div>`;
+  html+=`<div data-sec="act" id="actCard"></div>`;
 
   // Achievements
   const earned=ACHIEVEMENTS.filter(a=>a.earned(w,m)).length;
@@ -4227,6 +4576,8 @@ function renderProgressExtras(){
 
   host.innerHTML=html;
   paintHydration();
+  paintWeightCard();
+  paintActivityCard();
   host.querySelectorAll('[data-pr]').forEach(c=>c.onclick=()=>{
     const i=+c.dataset.pr,p=PRs[i];
     const v=prompt(`${p.name} (${p.unit})`,p.value??'');
@@ -5753,7 +6104,7 @@ const DEV_SECTIONS={
     ['weeksummary','Weekly summary card'],['daystrip','Day strip'],
   ],
   stats:[  // Progress view
-    ['hyd','Hydration graph'],['ach','Achievements'],['pr','Personal records'],
+    ['hyd','Hydration graph'],['wt','Weight'],['act','Steps & sleep'],['ach','Achievements'],['pr','Personal records'],
   ],
   day:[
     ['meals','Meal slots'],['water','Water tracker'],['notes','Day notes'],
@@ -7614,6 +7965,9 @@ function syncBoot(){
 
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState!=='visible') return;
+  /* Drain the scale inbox on its own throttle, independent of the sync gate —
+     a weigh-in should land even with auto-sync switched off. */
+  weightDrainInbox(false).catch(()=>{});
   if(!syncOn()||SYNC_CFG.auto===false||SYNC_QUIET) return;
   if(Date.now()-_syncLastFocus<SYNC_FOCUS_GAP) return;
   _syncLastFocus=Date.now();
@@ -7688,6 +8042,9 @@ document.getElementById('seqClose').onclick=()=>closeSeq(true);
   loadTraining();
   loadDevLayout();
   loadTiers();
+  /* After the loaders, so HEALTHLOG and PROFILE exist to write into. Both are
+     fire-and-forget: a failed inbox read must never block the app starting. */
+  setTimeout(()=>{ weightFromURL().catch(()=>{}); weightDrainInbox(true).catch(()=>{}); },0);
   loadSymbols();
   loadBadges();
   // test/debug hook — lets a harness inspect internals without changing behaviour
