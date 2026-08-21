@@ -1,6 +1,13 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- viewport-fit=cover is load-bearing on iPhone and its absence is silent.
+     Without it env(safe-area-inset-*) resolves to 0px everywhere, so every rule
+     in this file that pads for the notch or the home indicator — the FAB, the
+     sync chip, the app shell — was quietly padding by nothing. Paired with
+     apple-mobile-web-app-status-bar-style=black-translucent below, which already
+     extends the web view under the status bar, that put the header under the
+     notch on every installed device with one. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#000000">
 <link rel="icon" href="favicon.png">
@@ -155,14 +162,20 @@ if ('serviceWorker' in navigator) {
 
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
   html,body{background:var(--bg-0);color:var(--txt);font-family:var(--font);}
-  #app{min-height:100dvh;position:relative;padding:0 0 120px;
+  /* Bottom pad clears the FAB; the inset clears the home indicator under it.
+     Horizontal insets matter in landscape, where the notch eats into the side. */
+  #app{min-height:100dvh;position:relative;
+    padding:0 env(safe-area-inset-right,0px) calc(120px + env(safe-area-inset-bottom,0px)) env(safe-area-inset-left,0px);
     background:radial-gradient(1100px 700px at 12% -8%, var(--glow-red), transparent 60%),
       radial-gradient(900px 600px at 92% 4%, var(--glow-blue), transparent 55%),
       radial-gradient(800px 800px at 50% 120%, var(--glow-purple), transparent 60%),
       linear-gradient(180deg,var(--bg-1),var(--bg-0));}
   .wrap{max-width:780px;margin:0 auto;padding:0 18px;}
 
-  header{position:sticky;top:0;z-index:40;padding:18px 0 14px;background:var(--header-grad);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);}
+  /* The status bar is black-translucent, so the web view starts BEHIND it.
+     Without the top inset the wordmark sits under the clock on any notched
+     device. */
+  header{position:sticky;top:0;z-index:40;padding:calc(18px + env(safe-area-inset-top,0px)) 0 14px;background:var(--header-grad);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);}
   .hgrid{max-width:780px;margin:0 auto;padding:0 18px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;}
   .brand .kick{font-size:11px;letter-spacing:.32em;text-transform:uppercase;color:var(--red);font-weight:700;}
   .brand h1{font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1;margin-top:3px;background:var(--title-grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
@@ -226,7 +239,15 @@ if ('serviceWorker' in navigator) {
   .dchip.consumed{opacity:.5;filter:saturate(.55);}
   .dchip.consumed:not(.sel){border-color:var(--stroke);background:var(--card);}
   .dchip.consumed .dnum,.dchip.consumed .dow{color:var(--txt-3);}
-  .dchip .dcheck{position:absolute;top:5px;left:6px;font-size:9px;color:var(--txt-3);font-weight:900;}
+  /* Hidden on touch. A finished day already reads as finished — dimmed, drained
+     of colour, and tagged "Done" — so the tick was a third telling of the same
+     thing, and at 9px in the corner of a chip barely a centimetre wide it was
+     the one that cost the most and carried the least. Desktop has the room, and
+     `pointer:fine` is how the rest of the app already asks that question. */
+  .dchip .dcheck{display:none;}
+  @media (hover:hover) and (pointer:fine){
+    .dchip .dcheck{display:block;position:absolute;top:5px;left:6px;font-size:9px;color:var(--txt-3);font-weight:900;}
+  }
   .ing-subrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 2px 10px;padding-bottom:8px;border-bottom:1px solid var(--stroke);}
   .ing-chip{border:1px solid var(--stroke);background:var(--fill-1);color:var(--txt-3);font:600 11px var(--font);padding:5px 11px;border-radius:var(--r-pill);cursor:pointer;transition:.15s;}
   .ing-chip.on{background:rgba(255,159,10,0.16);border-color:var(--orange);color:var(--orange);}
@@ -349,6 +370,58 @@ if ('serviceWorker' in navigator) {
 
   .gh-curve{min-height:104px;}
 
+  /* trends */
+  .gh-corr{display:block;width:100%;height:auto;margin:6px 0 2px;}
+  .gh-legend{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;
+    font-size:11.5px;color:var(--txt-3);font-weight:600;margin-bottom:8px;}
+  .gh-legend span{display:inline-flex;align-items:center;gap:6px;}
+  .gh-legend i{display:inline-block;border-radius:2px;}
+  .gh-legend .lg-bar{width:9px;height:11px;background:var(--water-2);opacity:.55;}
+  .gh-legend .lg-line{width:14px;height:2.5px;background:var(--orange);border-radius:var(--r-pill);}
+  .gh-verdict{font-size:12.5px;color:var(--txt-2);line-height:1.55;margin:12px 2px 0;text-align:center;}
+  .ns-ax{font:800 9px var(--font);fill:var(--txt-3);}
+
+  /* Nutri-Score — the stepped A–E bar, with the graded cell lifted out of the
+     row. The lift is the whole point of the mark: it is legible across a shop
+     aisle precisely because you read the SHAPE before you read the letter. */
+  .ns-wrap{margin:14px 0 2px;}
+  .ns-bar{display:flex;align-items:center;justify-content:center;gap:0;padding:6px 0;}
+  .ns-cell{width:30px;height:30px;display:flex;align-items:center;justify-content:center;
+    background:var(--nc);font:800 14px var(--font);opacity:.42;
+    transition:transform .2s var(--spring),opacity .2s;}
+  .ns-cell:first-child{border-radius:var(--r-xs) 0 0 var(--r-xs);}
+  .ns-cell:last-child{border-radius:0 var(--r-xs) var(--r-xs) 0;}
+  .ns-cell.on{opacity:1;transform:scale(1.34);border-radius:var(--r-xs);
+    box-shadow:0 4px 14px rgba(0,0,0,.45),0 0 0 2.5px var(--card);position:relative;z-index:2;font-size:16px;}
+  .ns-cap{text-align:center;font-size:11.5px;color:var(--txt-3);margin-top:8px;}
+  .ns-cap b{font-weight:800;}
+
+  /* heart-rate scrubber */
+  .hr-stage{position:relative;padding-top:26px;}
+  /* A transparent sheet over the whole plot rather than a draggable handle:
+     there is nothing to aim at on a curve, and a 6px thumb on a phone is a
+     miss. touch-action:none is what stops the page scrolling out from under a
+     vertical-ish drag. */
+  .hr-grab{position:absolute;left:0;right:0;top:26px;bottom:0;touch-action:none;cursor:ew-resize;}
+  .hr-scrub{opacity:0;transition:opacity .18s var(--ease);}
+  .hr-scrub.on{opacity:1;}
+  .hr-scrub circle{transition:opacity .15s var(--ease);}
+  .hr-read{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap;
+    display:flex;align-items:baseline;gap:7px;pointer-events:none;
+    opacity:0;transition:opacity .18s var(--ease),left .06s linear;}
+  /* Driven by a class on the stage, not a sibling combinator: .hr-read is the
+     FIRST child, so it sits before both the svg and the grab sheet and no
+     combinator from either can reach back to it. */
+  .hr-stage.has-scrub .hr-read{opacity:1;}
+  .hr-read b{font:800 17px var(--font);color:var(--txt);font-variant-numeric:tabular-nums;letter-spacing:-.02em;}
+  .hr-read b u{font:700 10px var(--font);color:var(--txt-3);text-decoration:none;margin-left:2px;}
+  .hr-read i{font:600 12px var(--font);color:var(--txt-3);font-style:normal;font-variant-numeric:tabular-nums;}
+
+  /* restlessness trace — sits directly above the hypnogram and shares its x
+     scale, so a peak here lines up with the blocks that caused it */
+  .gh-rest{margin:16px 0 2px;}
+  .gh-restsvg{display:block;width:100%;height:46px;}
+
   /* segmented control, matching the app's own .seg language at card scale */
   .gh-seg{display:flex;gap:4px;background:var(--fill-2);border:1px solid var(--stroke);
     border-radius:var(--r-sm);padding:3px;margin-bottom:16px;}
@@ -362,6 +435,21 @@ if ('serviceWorker' in navigator) {
   .gh-meter{height:6px;border-radius:var(--r-pill);background:var(--fill-track);overflow:hidden;}
   .gh-meter span{display:block;height:100%;border-radius:var(--r-pill);
     background:linear-gradient(90deg,var(--water-1),var(--water-2));transition:width .6s var(--ease);}
+
+  /* radial cardio load */
+  .gh-radial{width:100%;max-width:250px;margin:16px auto 4px;aspect-ratio:1;}
+  .gh-rnum{font:800 27px var(--font);fill:var(--txt);letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+  .gh-rlab{font:600 10px var(--font);fill:var(--txt-3);letter-spacing:.08em;text-transform:uppercase;}
+  /* Spokes bloom outward from the hub. pathLength="1" normalises every line to
+     the same nominal length, so one keyframe drives all of them regardless of
+     how long each actually is. Pure CSS with `forwards`, deliberately: the note
+     on renderHealth explains why a requestAnimationFrame callback cannot be
+     relied on to still find these nodes attached. */
+  @keyframes gh-spoke{to{stroke-dashoffset:0;}}
+  @media (prefers-reduced-motion:reduce){
+    .gh-radial line{animation:none!important;stroke-dashoffset:0!important;}
+  }
+  .gh-srcnote{font-size:11px;color:var(--txt-3);line-height:1.5;margin:10px 2px 0;text-align:center;}
 
   .gh-chart{display:flex;align-items:flex-end;gap:5px;height:80px;margin:18px 0 4px;}
   .gh-bcol{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:6px;}
@@ -500,7 +588,7 @@ if ('serviceWorker' in navigator) {
   .field{margin-top:16px;}
   .field label{font-size:12px;font-weight:600;color:var(--txt-2);display:block;margin-bottom:6px;letter-spacing:.02em;}
   .field input,.field textarea,.field select{width:100%;background:var(--fill-3);border:1px solid var(--stroke);border-radius:var(--r-sm);padding:13px 14px;color:var(--txt);font:500 15px var(--font);outline:none;transition:.2s;resize:vertical;}
-  .field input:focus,.field textarea:focus,.field select:focus{border-color:var(--red);background:rgba(255,69,58,0.06);}
+  .field input:focus,.field textarea:focus,.field select:focus{border-color:var(--red);background:color-mix(in srgb,var(--red) 6%,transparent);}
   .field textarea{min-height:70px;}
   .field2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 
@@ -544,7 +632,7 @@ if ('serviceWorker' in navigator) {
   .ing-row{display:grid;gap:8px;align-items:center;margin-top:6px;}
   .ing-row input,.ing-row .macro-cell input{width:100%;background:var(--card-2);border:1px solid var(--stroke);border-radius:var(--r-sm);padding:10px 11px;color:var(--txt);font:500 13px var(--font);outline:none;transition:.2s;}
   .ing-row input::placeholder{color:var(--txt-3);}
-  .ing-row input:focus{border-color:var(--red);background:rgba(255,69,58,0.06);}
+  .ing-row input:focus{border-color:var(--red);background:color-mix(in srgb,var(--red) 6%,transparent);}
   .ing-row .macro-cell{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;}
   .ing-row .rmi{width:28px;height:28px;border-radius:50%;border:1px solid var(--stroke);background:var(--fill-2);color:var(--txt-2);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;transition:.2s;}
   .ing-row .rmi:hover{background:var(--red);border-color:var(--red);color:#fff;}
@@ -553,10 +641,10 @@ if ('serviceWorker' in navigator) {
   .addrow-btn.split{margin-top:0;}
   .addrow-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px;}
   .step-row{display:flex;gap:8px;align-items:flex-start;margin-top:8px;}
-  .step-row .stepnum{width:22px;height:22px;border-radius:50%;background:rgba(255,69,58,0.16);color:var(--red);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto;margin-top:9px;}
+  .step-row .stepnum{width:22px;height:22px;border-radius:50%;background:var(--red-soft);color:var(--red);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto;margin-top:9px;}
   .step-row textarea{flex:1;min-height:46px;background:var(--card-2);border:1px solid var(--stroke);border-radius:var(--r-sm);padding:10px 12px;color:var(--txt);font:500 13.5px var(--font);line-height:1.45;outline:none;resize:vertical;transition:.2s;}
   .step-row textarea::placeholder{color:var(--txt-3);}
-  .step-row textarea:focus{border-color:var(--red);background:rgba(255,69,58,0.06);}
+  .step-row textarea:focus{border-color:var(--red);background:color-mix(in srgb,var(--red) 6%,transparent);}
   .step-row .rmi{width:28px;height:28px;border-radius:50%;border:1px solid var(--stroke);background:var(--fill-2);color:var(--txt-2);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;margin-top:9px;transition:.2s;}
   .step-row .rmi:hover{background:var(--red);border-color:var(--red);color:#fff;}
 
@@ -595,12 +683,12 @@ if ('serviceWorker' in navigator) {
   .lib-search:focus{border-color:var(--red);}
   .rec-actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 2px;}
   .rec-act{border:1px solid var(--stroke);background:var(--fill-2);color:var(--txt-2);font:600 12.5px var(--font);padding:9px 14px;border-radius:var(--r-sm);cursor:pointer;transition:.2s;}
-  .rec-act:hover{border-color:var(--red);color:var(--txt);background:rgba(255,69,58,0.06);}
+  .rec-act:hover{border-color:var(--red);color:var(--txt);background:color-mix(in srgb,var(--red) 6%,transparent);}
   #toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%) translateY(20px);z-index:200;background:var(--toast-bg);border:1px solid var(--stroke-2);color:var(--txt);font:600 13.5px var(--font);padding:12px 20px;border-radius:var(--r-md);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);box-shadow:var(--sh-toast);opacity:0;pointer-events:none;transition:.3s var(--spring);max-width:90vw;text-align:center;}
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
   .qty-stepper{display:flex;align-items:center;gap:8px;}
   .qty-stepper input{flex:1;text-align:center;background:var(--fill-3);border:1px solid var(--stroke);border-radius:var(--r-sm);padding:13px 14px;color:var(--txt);font:700 18px var(--font);outline:none;}
-  .qty-stepper input:focus{border-color:var(--red);background:rgba(255,69,58,0.06);}
+  .qty-stepper input:focus{border-color:var(--red);background:color-mix(in srgb,var(--red) 6%,transparent);}
   .qty-stepper button{width:46px;height:46px;flex:0 0 auto;border-radius:var(--r-sm);border:1px solid var(--stroke);background:var(--fill-2);color:var(--txt);font-size:22px;font-weight:700;cursor:pointer;transition:.15s;}
   .qty-stepper button:hover{border-color:var(--red);background:rgba(255,69,58,0.08);}
   /* fridge */
@@ -618,6 +706,84 @@ if ('serviceWorker' in navigator) {
   .exp-soon{background:rgba(255,159,10,0.16);color:var(--orange);}
   .exp-past{background:rgba(255,69,58,0.16);color:var(--red);}
   .exp-ok{background:var(--fill-3);color:var(--txt-3);}
+
+  /* ===== vitamins: the pull-tab under the day note =====
+     The handle straddles the bottom edge of the textarea, half in and half out,
+     so it reads as attached to the note rather than as a control that happens to
+     sit below one. */
+  /* Normal flow, with the handle pulled UP to straddle the textarea's edge.
+     The first attempt anchored .vt with position:absolute;bottom:0 — which pins
+     the bottom of the whole handle-plus-panel column to the bottom of the note,
+     so opening the panel grew it UPWARD and laid it straight over the meal
+     slots. In flow, the panel simply pushes what follows down, which is also
+     what makes the day card scroll to it. */
+  .note-wrap{position:relative;}
+  .vt{display:flex;flex-direction:column;align-items:center;position:relative;z-index:2;margin-top:-14px;}
+  .vt-handle{display:flex;align-items:center;gap:5px;cursor:pointer;
+    border:1px solid var(--stroke);border-radius:var(--r-pill);
+    background:var(--bg-2);color:var(--txt-3);padding:5px 11px;min-height:28px;
+    font:700 11px var(--font);transition:border-color .2s,transform .18s var(--spring);}
+  .vt-handle:active{transform:scale(.94);}
+  .vt.open .vt-handle{border-color:var(--stroke-2);}
+  .vt-chev{font-size:9px;line-height:1;transition:transform .3s var(--spring);color:var(--txt-3);}
+  .vt.open .vt-chev{transform:rotate(180deg);}
+  .vt-plus{font-size:14px;line-height:1;font-weight:800;}
+  .vt-mini{display:inline-flex;align-items:center;justify-content:center;
+    min-width:17px;height:17px;padding:0 4px;border-radius:var(--r-pill);
+    background:var(--vc);color:#12100c;font:800 9px var(--font);}
+  .vt-panel{width:100%;margin-top:8px;background:var(--card-2);border:1px solid var(--stroke);
+    border-radius:var(--r-md);padding:12px;}
+  .vt-panel[hidden]{display:none;}
+  .vt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:7px;}
+  .vt-tok{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;
+    border:1px solid var(--stroke);border-radius:var(--r-sm);background:var(--fill-1);
+    padding:9px 4px 7px;transition:border-color .18s,background .18s,transform .18s var(--spring);}
+  .vt-tok:active{transform:scale(.95);}
+  .vt-s{display:flex;align-items:center;justify-content:center;width:30px;height:30px;
+    border-radius:50%;border:1.5px solid var(--vc);color:var(--vc);
+    font:800 11px var(--font);transition:background .18s,color .18s;}
+  .vt-amt{font:600 9px var(--font);color:var(--txt-3);text-align:center;line-height:1.25;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
+  .vt-tok.on{border-color:var(--vc);background:color-mix(in srgb,var(--vc) 12%,transparent);}
+  .vt-tok.on .vt-s{background:var(--vc);color:#12100c;}
+  .vt-tok.on .vt-amt{color:var(--txt-2);font-weight:700;}
+  .vt-edit{margin-top:10px;padding-top:10px;border-top:1px solid var(--stroke);}
+  .vt-edit[hidden]{display:none;}
+  .vt-erow{display:flex;align-items:center;gap:8px;}
+  .vt-en{flex:1;min-width:0;font:700 12px var(--font);color:var(--vc);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .vt-erow input{width:88px;background:var(--fill-3);border:1px solid var(--stroke);
+    border-radius:var(--r-xs);padding:8px 10px;color:var(--txt);font:600 13px var(--font);outline:none;}
+  .vt-erow input:focus{border-color:var(--stroke-2);}
+  .vt-eu{font:600 11px var(--font);color:var(--txt-3);min-width:44px;}
+  .vt-ebtns{display:flex;gap:7px;margin-top:9px;}
+  .vt-save,.vt-rm{flex:1;border:0;border-radius:var(--r-xs);padding:9px;cursor:pointer;
+    font:700 12px var(--font);transition:transform .18s var(--spring);}
+  .vt-save{background:var(--red);color:#fff;}
+  .vt-rm{background:var(--fill-3);color:var(--txt-2);}
+  .vt-save:active,.vt-rm:active{transform:scale(.96);}
+
+  /* expiry banner — Fridge tab only, and no notification anywhere */
+  .fx-banner{margin:4px 0 12px;border:1px solid var(--stroke);border-radius:var(--r-md);
+    background:var(--card);overflow:hidden;}
+  .fx-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--stroke);}
+  .fx-n{flex:0 0 auto;min-width:28px;height:28px;padding:0 7px;border-radius:var(--r-pill);
+    display:flex;align-items:center;justify-content:center;font:800 13px var(--font);}
+  .fx-past .fx-n{background:rgba(255,69,58,0.18);color:var(--red);}
+  .fx-soon .fx-n{background:rgba(255,159,10,0.18);color:var(--orange);}
+  .fx-t{min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .fx-t b{font-size:13.5px;font-weight:700;}
+  .fx-t i{font-style:normal;font-size:11.5px;color:var(--txt-3);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .fx-set{width:100%;border:0;background:transparent;color:var(--txt-3);
+    font:600 11.5px var(--font);padding:10px;cursor:pointer;text-align:center;}
+  .fx-set:hover{color:var(--txt-2);background:var(--fill-1);}
+  /* count on the Fridge sub-tab */
+  [data-food]{position:relative;}
+  .fx-dot{position:absolute;top:-4px;right:-5px;min-width:16px;height:16px;padding:0 4px;
+    border-radius:var(--r-pill);background:var(--orange);color:#1a1206;
+    font:800 10px/16px var(--font);text-align:center;pointer-events:none;}
+  .fx-dot.past{background:var(--red);color:#fff;}
   .avail-card{padding:14px 16px;border-radius:var(--r-md);border:1px solid var(--stroke);margin-top:8px;background:var(--card);cursor:pointer;transition:.15s;}
   .avail-card:hover{border-color:var(--stroke-2);}
   .avail-card.can{border-left:3px solid #34c759;}
@@ -646,7 +812,7 @@ if ('serviceWorker' in navigator) {
   .addbtn{position:fixed!important;top:auto!important;left:auto!important;
     right:calc(18px + env(safe-area-inset-right,0px))!important;
     bottom:calc(28px + env(safe-area-inset-bottom,0px))!important;
-    margin:0;z-index:60;width:58px;height:58px;border-radius:50%;border:0;cursor:pointer;background:linear-gradient(180deg,#ff5a4f,#e0352b);color:#fff;font-size:28px;font-weight:300;line-height:1;box-shadow:0 10px 30px rgba(255,69,58,0.45);display:flex;align-items:center;justify-content:center;transition:transform .25s var(--spring);}
+    margin:0;z-index:60;width:58px;height:58px;border-radius:50%;border:0;cursor:pointer;background:var(--cta-grad);color:#fff;font-size:28px;font-weight:300;line-height:1;box-shadow:var(--sh-fab);display:flex;align-items:center;justify-content:center;transition:transform .25s var(--spring);}
   @media (hover:hover) and (pointer:fine){.addbtn:hover{transform:scale(1.08) rotate(90deg);}}
   .addbtn:active{transform:scale(.95);}
   .empty{text-align:center;color:var(--txt-3);padding:50px 20px;font-size:14px;line-height:1.6;}
@@ -784,9 +950,71 @@ if ('serviceWorker' in navigator) {
 
   .lib-search{width:100%;background:var(--card);border:1px solid var(--stroke);border-radius:var(--r-md);padding:13px 16px;color:var(--txt);font:500 15px var(--font);outline:none;margin:8px 0 4px;backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);transition:.2s;}
   .lib-search:focus{border-color:var(--red);}
-  .filt{display:flex;gap:8px;overflow-x:auto;padding:10px 0;scrollbar-width:none;}.filt::-webkit-scrollbar{display:none;}
+  /* flex-wrap:nowrap is not redundant. The earlier .filt rule sets wrap, this
+     later one only added overflow-x:auto — leaving a scroll container that can
+     never scroll, because wrapping always wins over overflowing. The Food
+     sub-tabs dropped "Fridge" onto a second line rather than scrolling, and the
+     meal picker did the same once Snap joined the row. -webkit-overflow-
+     scrolling keeps the momentum flick on iOS. */
+  .filt{display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
+    padding:10px 0;scrollbar-width:none;scroll-padding-inline:2px;}
+  .filt::-webkit-scrollbar{display:none;}
   .filt button{flex:0 0 auto;border:1px solid var(--stroke);background:var(--card);color:var(--txt-2);border-radius:var(--r-pill);padding:8px 14px;font:600 12px var(--font);cursor:pointer;transition:.2s;white-space:nowrap;}
   .filt button.on{background:var(--red);border-color:var(--red);color:#fff;}
+
+  /* Inline icon inside a text button. GH_ICON entries carry a viewBox but no
+     width/height, so dropped into a button unwrapped they lay out at the SVG
+     default of 300×150 and blow the control apart. Everything that puts a glyph
+     next to a word goes through this. */
+  .ic-in{display:inline-block;width:1.15em;height:1.15em;vertical-align:-.22em;margin-right:.28em;}
+  .ic-in svg{width:100%;height:100%;display:block;}
+
+  /* ---- Snap: the one entry in the picker that isn't a list ----
+     Two glyphs behind one moving edge — describe it in words, or photograph it.
+     Both go to the same model, so they belong in the same box rather than as two
+     more grey pills that look like Recipes and Products.
+
+     The rainbow is a conic gradient on an oversized pseudo-element that ROTATES.
+     Not border-image (cannot follow a pill radius on iOS) and not an animated
+     background-position (that slides hues ALONG the box, which reads as a
+     shimmer — this needs to read as an orbit). The square is 230% and centred so
+     its corners never sweep into view; overflow:hidden on the pill does the rest.
+
+     Hues are the app's own accent variables, not literal hex. The grayscale
+     theme remaps those to greys, so this drains to a slowly turning graphite
+     ring there without needing a single override. */
+  .filt button.snap-chip{position:relative;isolation:isolate;overflow:hidden;flex:0 0 auto;
+    display:inline-flex;align-items:center;gap:5px;white-space:nowrap;cursor:pointer;
+    border:0;background:transparent;border-radius:var(--r-pill);padding:8px 14px;
+    font:700 12px var(--font);color:var(--txt-2);
+    transition:transform .18s var(--spring),color .2s;}
+  .filt button.snap-chip::before{content:'';position:absolute;z-index:-2;
+    left:50%;top:50%;width:230%;aspect-ratio:1;transform:translate(-50%,-50%);
+    background:conic-gradient(var(--red),var(--orange),var(--green),var(--teal),
+      var(--blue),var(--purple),var(--pink),var(--red));
+    animation:snap-orbit 5.5s linear infinite;}
+  /* The inner plate. Inset IS the border width — there is no border property
+     here, the gradient simply shows through the gap. */
+  /* The plate has to be OPAQUE or the gradient floods the whole pill and the
+     ring stops being a ring. --card is 55% alpha by design (it sits on blurred
+     glass everywhere else), so it is stacked over --bg-2 rather than used raw:
+     same tint, no transparency, and it still tracks the theme. */
+  .filt button.snap-chip::after{content:'';position:absolute;z-index:-1;inset:1.5px;
+    border-radius:inherit;background:linear-gradient(var(--card),var(--card)),var(--bg-2);
+    transition:inset .2s var(--ease);}
+  @keyframes snap-orbit{to{transform:translate(-50%,-50%) rotate(1turn);}}
+  .filt button.snap-chip .snap-ic{display:inline-flex;width:15px;height:15px;flex:0 0 auto;}
+  .filt button.snap-chip .snap-ic svg{width:15px;height:15px;display:block;}
+  /* Selected: the ring thickens and the plate lightens. Filling it red like the
+     other pills would bury the gradient, which IS this control's identity. */
+  /* `.filt button.on` sets a red fill at (0,2,1) and would otherwise win here.
+     The pseudo-elements happen to cover it, so this is not a visible bug today —
+     it is one waiting for the day someone changes an inset or a radius. */
+  .filt button.snap-chip.on{color:var(--txt);background:transparent;border:0;}
+  .filt button.snap-chip.on::after{inset:2.5px;
+    background:linear-gradient(var(--fill-3),var(--fill-3)),var(--bg-2);}
+  .filt button.snap-chip:active{transform:scale(.94);}
+  @media (prefers-reduced-motion:reduce){.filt button.snap-chip::before{animation:none;}}
   .lib-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px;}
   @media(min-width:560px){.lib-grid{grid-template-columns:1fr 1fr 1fr;}}
   .lib-card{background:var(--card);border:1px solid var(--stroke);border-radius:var(--r-md);padding:14px 10px;cursor:pointer;transition:transform .22s var(--spring),border-color .22s;backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);display:flex;flex-direction:column;align-items:center;text-align:center;opacity:0;transform:translateY(8px);animation:dayIn .45s var(--ease) forwards;}
@@ -979,6 +1207,139 @@ if ('serviceWorker' in navigator) {
   .skx-next-bar i{display:block;height:100%;border-radius:var(--r-pill);transition:width .5s var(--ease);}
   .skx-next span{font-size:12px;font-weight:700;color:var(--txt-2);}
   .skx-outer.prism{background:linear-gradient(135deg,rgba(255,94,126,0.14),rgba(255,176,32,0.14),rgba(94,230,196,0.14),rgba(94,155,255,0.14));border-color:transparent;}
+
+  /* ===== milestone celebration =====
+     Sits above the sheet (z 300) because a tier can be crossed by an action
+     taken inside one — ticking the last meal of the day off in the picker. */
+  .awd-wrap{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;
+    padding:24px;background:rgba(0,0,0,0.62);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    opacity:0;transition:opacity .24s var(--ease);}
+  .awd-wrap.in{opacity:1;}
+  .awd-wrap.out{opacity:0;}
+  .awd-card{width:100%;max-width:330px;text-align:center;padding:26px 22px 20px;
+    background:var(--sheet-grad);border:1px solid var(--stroke-2);border-radius:var(--r-2xl);
+    box-shadow:0 30px 80px rgba(0,0,0,0.6);
+    transform:scale(.86) translateY(14px);opacity:0;
+    transition:transform .42s var(--spring),opacity .3s var(--ease);}
+  .awd-wrap.in .awd-card{transform:none;opacity:1;}
+  .awd-wrap.out .awd-card{transform:scale(.94);opacity:0;transition-duration:.2s;}
+
+  .awd-stage{position:relative;height:104px;display:flex;align-items:center;justify-content:center;}
+  .awd-art{position:relative;z-index:2;display:block;transform:scale(.4) rotate(-14deg);opacity:0;}
+  .awd-art .skx-badge{width:100px;height:90px;}
+  .awd-emoji{font-size:58px;line-height:1;}
+  .awd-wrap.in .awd-art{animation:awd-pop .62s var(--spring) .08s forwards;}
+  @keyframes awd-pop{
+    0%{transform:scale(.4) rotate(-14deg);opacity:0;}
+    55%{opacity:1;}
+    70%{transform:scale(1.09) rotate(3deg);}
+    100%{transform:none;opacity:1;}}
+  /* Two rings expanding out from behind the badge. Cheap, and it does what a
+     particle burst would do without a canvas or a single timer. */
+  .awd-burst{position:absolute;left:50%;top:50%;width:96px;height:96px;margin:-48px 0 0 -48px;
+    border-radius:50%;border:2px solid var(--red);opacity:0;z-index:1;pointer-events:none;}
+  .awd-wrap.in .awd-burst{animation:awd-ring .95s var(--ease) .16s forwards;}
+  .awd-wrap.in .awd-burst.b2{animation-delay:.34s;border-width:1px;}
+  @keyframes awd-ring{0%{transform:scale(.5);opacity:.75;}100%{transform:scale(2.5);opacity:0;}}
+
+  .awd-kick{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--red-ink);margin-top:6px;}
+  .awd-name{font-size:27px;font-weight:800;letter-spacing:-.03em;margin-top:5px;color:var(--txt);}
+  .awd-msg{font-size:13.5px;color:var(--txt-3);margin-top:6px;line-height:1.5;}
+  .awd-kick,.awd-name,.awd-msg{opacity:0;transform:translateY(8px);}
+  .awd-wrap.in .awd-kick,.awd-wrap.in .awd-name,.awd-wrap.in .awd-msg{
+    animation:awd-rise .44s var(--ease) forwards;}
+  .awd-wrap.in .awd-kick{animation-delay:.24s;}
+  .awd-wrap.in .awd-name{animation-delay:.31s;}
+  .awd-wrap.in .awd-msg {animation-delay:.38s;}
+  @keyframes awd-rise{to{opacity:1;transform:none;}}
+  .awd-go{margin-top:20px;}
+
+  @media (prefers-reduced-motion:reduce){
+    /* The moment still happens, it just arrives instead of performing. */
+    .awd-card,.awd-art,.awd-kick,.awd-name,.awd-msg{transition:none!important;animation:none!important;
+      opacity:1!important;transform:none!important;}
+    .awd-burst{display:none;}
+  }
+
+  /* ===== touch targets =====
+     Design is mobile-first now, and several controls were drawn at the size
+     they LOOK right rather than the size a thumb needs — the main tab bar at
+     33px tall, the week arrows at 30px, both well under the 44px everyone
+     converges on.
+
+     These grow the hit area with a pseudo-element instead of growing the
+     control, because the sizes themselves are correct: a 30px circle is what
+     the week nav should look like, it just should not be what you have to hit.
+     Expansion is vertical-only on the horizontal rows — inflating sideways
+     would overlap the neighbouring tab and turn a near-miss into a wrong tap. */
+  .seg button::after,.weeknav button::after,.seq-close::after,.vt-handle::after{
+    content:'';position:absolute;left:0;right:0;top:50%;height:44px;transform:translateY(-50%);}
+  .seg button,.vt-handle{position:relative;}
+  .weeknav button,.seq-close{position:relative;}
+  .seq-close::after{left:50%;right:auto;width:44px;transform:translate(-50%,-50%);}
+  /* 40px, not 44. The two week arrows are 30px wide with a 10px gap, so a full
+     44px area on each would overlap its neighbour by 4px — and in the overlap
+     the tap goes to whichever happens to paint last, which is how you press
+     "previous week" and land on "next". 40px consumes exactly the gap and stops. */
+  .weeknav button::after{left:50%;right:auto;width:40px;transform:translate(-50%,-50%);}
+
+  /* ===== dev · UI · Style =====
+     Health-tab language: a section head in plain type over a card surface, not
+     the boxed-label form the rest of the dev sheet uses. */
+  .sty-sec{margin-top:20px;}
+  .sty-sec h4{font:700 13px var(--font);color:var(--txt-3);letter-spacing:.02em;margin:0 0 9px 2px;}
+  .sty-preview{margin-top:16px;border:1px solid var(--stroke);border-radius:var(--r-xl);
+    background:linear-gradient(180deg,var(--fill-2),var(--fill-1));padding:18px;text-align:center;}
+  .sty-pv-title{font:800 26px var(--font);letter-spacing:-.03em;
+    background:var(--title-grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .sty-pv-row{display:flex;align-items:baseline;justify-content:center;gap:7px;margin-top:4px;}
+  .sty-pv-num{font:800 30px var(--font);color:var(--red);letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+  .sty-pv-lab{font:600 12px var(--font);color:var(--txt-3);}
+  .sty-pv-btns{display:flex;gap:8px;margin-top:14px;}
+  .sty-pv-cta,.sty-pv-ghost{flex:1;border:0;border-radius:var(--r-sm);padding:11px;
+    font:700 13px var(--font);cursor:default;}
+  .sty-pv-cta{background:var(--cta-grad);color:#fff;box-shadow:var(--sh-cta);}
+  .sty-pv-ghost{background:var(--fill-3);color:var(--txt-2);border:1px solid var(--stroke);}
+
+  .sty-swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px;}
+  .sty-sw{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;
+    border:1px solid var(--stroke);border-radius:var(--r-sm);background:var(--fill-1);padding:10px 4px 8px;
+    transition:border-color .18s,background .18s,transform .18s var(--spring);}
+  .sty-sw:active{transform:scale(.95);}
+  .sty-sw i{width:26px;height:26px;border-radius:50%;background:var(--sw);
+    box-shadow:0 0 0 0 var(--sw);transition:box-shadow .22s var(--ease);}
+  .sty-sw span{font:600 10px var(--font);color:var(--txt-3);}
+  .sty-sw.on{border-color:var(--sw);background:color-mix(in srgb,var(--sw) 12%,transparent);}
+  .sty-sw.on i{box-shadow:0 0 0 3px color-mix(in srgb,var(--sw) 30%,transparent);}
+  .sty-sw.on span{color:var(--txt);font-weight:700;}
+  .sty-note{font-size:11px;color:var(--txt-3);line-height:1.5;margin:10px 2px 0;}
+
+  .sty-fonts{display:flex;flex-direction:column;gap:7px;}
+  .sty-font{display:flex;align-items:center;gap:12px;cursor:pointer;text-align:left;
+    border:1px solid var(--stroke);border-radius:var(--r-sm);background:var(--fill-1);padding:10px 12px;
+    transition:border-color .18s,background .18s;}
+  .sty-fsample{flex:0 0 auto;width:38px;height:38px;display:flex;align-items:center;justify-content:center;
+    border-radius:var(--r-xs);background:var(--fill-3);color:var(--txt);font-size:18px;font-weight:700;}
+  .sty-fmeta{display:flex;flex-direction:column;gap:2px;min-width:0;}
+  .sty-fmeta b{font-size:14px;color:var(--txt);}
+  .sty-fmeta i{font-style:normal;font-size:11px;color:var(--txt-3);}
+  .sty-font.on{border-color:var(--red);background:var(--red-soft);}
+  .sty-font.on .sty-fsample{background:var(--red);color:#fff;}
+
+  .sty-presets{display:flex;flex-direction:column;gap:7px;}
+  .sty-pre{display:flex;align-items:center;gap:11px;cursor:pointer;
+    border:1px solid var(--stroke);border-radius:var(--r-sm);background:var(--card);padding:11px 12px;
+    transition:border-color .18s,background .18s;}
+  .sty-pre.on{border-color:var(--red);background:var(--red-soft);}
+  .sty-pdot{flex:0 0 auto;width:14px;height:14px;border-radius:50%;}
+  .sty-pinfo{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .sty-pinfo b{font-size:13.5px;}
+  .sty-pinfo i{font-style:normal;font-size:11px;color:var(--txt-3);}
+  .sty-plock{font:700 9px var(--font);text-transform:uppercase;letter-spacing:.06em;
+    color:var(--txt-3);background:var(--fill-3);padding:3px 7px;border-radius:var(--r-pill);}
+  .sty-pdel{flex:0 0 auto;width:24px;height:24px;border-radius:50%;border:1px solid var(--stroke);
+    background:var(--fill-2);color:var(--txt-3);cursor:pointer;font-size:13px;line-height:1;}
+  .sty-pdel:hover{background:var(--red);border-color:var(--red);color:#fff;}
 
   /* ===== profile hub switch ===== */
   .prof-switch{display:flex;gap:6px;background:var(--fill-2);border-radius:var(--r-sm);padding:4px;margin-bottom:16px;}
@@ -1236,7 +1597,7 @@ if ('serviceWorker' in navigator) {
     <section id="tab-products" class="hide">
       <p style="font-size:13px;color:var(--txt-2);line-height:1.55;margin:8px 2px 0">Everyday items — milk, fruit, eggs — addable straight to any meal slot without building a full recipe.</p>
       <div class="rec-actions" style="margin:10px 2px 2px">
-        <button class="rec-act" id="scanProdBtn">⌷ Scan barcode</button>
+        <button class="rec-act" id="scanProdBtn"><span class="ic-in" data-ghicon="barcode"></span>Scan barcode</button>
         <button class="rec-act" id="dedupeProdBtn">⧉ Find duplicates</button>
       </div>
       <div class="reclib-grid" id="prodGrid"></div>
@@ -1671,10 +2032,114 @@ function applyTheme(){
 }
 /* Muscle-art accent: 'orange' = two-hue (target red / assist orange), 'mono' = single-hue red family. */
 function applyAccent(){ const a=(PROFILE.accent==='orange')?'orange':'mono'; const html=document.documentElement, app=document.getElementById('app'); html.setAttribute('data-accent',a); app&&app.setAttribute('data-accent',a); }
+
+/* ============ STYLE — theme, typeface, accent, and presets ============
+   Theme used to be three buttons buried in the middle of the profile form,
+   between your goal and a paragraph about calorie baselines. It is now one of
+   four axes on its own surface, with presets so a look can be kept and come
+   back to.
+
+   Everything applies by writing custom properties onto <html>, which is the
+   same mechanism the themes already use — so a style change costs no re-render,
+   and anything that reads var(--red) or var(--font) picks it up for free. */
+const STYLE_KEY='aerte5_style';
+const STYLE_FONTS=[
+  {id:'system', n:'System',  d:'The default',    v:'-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,sans-serif'},
+  {id:'rounded',n:'Rounded', d:'Softer, friendlier', v:'ui-rounded,"SF Pro Rounded","Hiragino Maru Gothic ProN",system-ui,sans-serif'},
+  {id:'grotesk',n:'Grotesk', d:'Tighter, neutral',   v:'"Helvetica Neue",Helvetica,Arial,sans-serif'},
+  {id:'serif',  n:'Serif',   d:'Editorial',      v:'ui-serif,"New York",Georgia,"Times New Roman",serif'},
+  {id:'mono',   n:'Mono',    d:'Every digit aligns', v:'ui-monospace,"SF Mono",Menlo,Consolas,monospace'},
+];
+const STYLE_ACCENTS=[
+  {id:'red',   n:'Aerte',    v:'#ff453a'},
+  {id:'amber', n:'Amber',    v:'#ff9f0a'},
+  {id:'green', n:'Green',    v:'#30d158'},
+  {id:'blue',  n:'Blue',     v:'#0a84ff'},
+  {id:'violet',n:'Violet',   v:'#bf5af2'},
+  {id:'pink',  n:'Pink',     v:'#ff375f'},
+  {id:'teal',  n:'Teal',     v:'#5ac8fa'},
+  {id:'stone', n:'Graphite', v:'#8e8e93'},
+];
+const STYLE_DEFAULT={theme:'dark',font:'system',accent:'red'};
+
+let STYLE={presets:[],active:null};
+function loadStyle(){
+  try{ const r=gget(STYLE_KEY); STYLE=r?JSON.parse(r.value):{presets:[],active:null}; }
+  catch(e){ STYLE={presets:[],active:null}; }
+  if(!Array.isArray(STYLE.presets)) STYLE.presets=[];
+  /* First run banks whatever the app looks like RIGHT NOW as preset one, before
+     anything here has had a chance to change it. That is the recoverable
+     starting point — without it the original look is only reconstructable by
+     remembering what the defaults were. */
+  if(!STYLE.presets.length){
+    STYLE.presets.push({
+      id:'p0', name:'Original', locked:true,
+      theme:THEMES.includes(PROFILE.theme)?PROFILE.theme:'dark',
+      font:'system',
+      accent:'red',
+    });
+    STYLE.active='p0';
+    saveStyle();
+  }
+  if(!STYLE.presets.some(p=>p.id===STYLE.active)) STYLE.active=STYLE.presets[0].id;
+}
+function saveStyle(){ gset(STYLE_KEY,JSON.stringify(STYLE)); }
+function activeStyle(){
+  return STYLE.presets.find(p=>p.id===STYLE.active)||Object.assign({},STYLE_DEFAULT);
+}
+function hexRGB(h){
+  h=String(h||'').replace('#','');
+  if(h.length===3) h=h.split('').map(c=>c+c).join('');
+  return [parseInt(h.slice(0,2),16)||0,parseInt(h.slice(2,4),16)||0,parseInt(h.slice(4,6),16)||0];
+}
+/* Lighten toward white — used for --red-ink, which has to stay readable as text
+   on a tinted chip and so cannot just be the accent itself. */
+function hexLift(h,amt){
+  const [r,g,b]=hexRGB(h), m=v=>Math.round(v+(255-v)*amt);
+  return `rgb(${m(r)},${m(g)},${m(b)})`;
+}
+function applyStyle(){
+  const s=activeStyle(), root=document.documentElement.style;
+  const f=STYLE_FONTS.find(x=>x.id===s.font)||STYLE_FONTS[0];
+  root.setProperty('--font',f.v);
+
+  const a=STYLE_ACCENTS.find(x=>x.id===s.accent)||STYLE_ACCENTS[0];
+  /* Every token derived from --red has to move with it or the accent goes half
+     applied: the CTA keeps its old gradient, the selected day keeps its old
+     halo. They are computed rather than listed per accent so adding a colour to
+     STYLE_ACCENTS stays a one-line change. */
+  const [R,G,B]=hexRGB(a.v);
+  const setAccent=(on)=>{
+    const props={
+      '--red':a.v,
+      '--red-soft':`rgba(${R},${G},${B},0.16)`,
+      '--red-ink':hexLift(a.v,0.42),
+      '--red-line':`rgba(${R},${G},${B},0.3)`,
+      '--cta-grad':`linear-gradient(180deg,${a.v},rgb(${Math.round(R*.86)},${Math.round(G*.86)},${Math.round(B*.86)}))`,
+      '--sh-cta':`0 8px 24px rgba(${R},${G},${B},0.3)`,
+      /* The FAB was painting a literal #ff5a4f gradient and a literal red
+         shadow rather than reading these — it stayed Aerte-red under every
+         accent, which is exactly the kind of leak that makes a theming feature
+         feel half-finished. Both are tokens now. */
+      '--sh-fab':`0 10px 30px rgba(${R},${G},${B},0.45)`,
+      '--sel-glow':`rgba(${R},${G},${B},0.25)`,
+      '--glow-red':`rgba(${R},${G},${B},0.12)`,
+      '--heat-train':`rgba(${R},${G},${B},0.6)`,
+    };
+    for(const k in props){ if(on) root.setProperty(k,props[k]); else root.removeProperty(k); }
+  };
+  /* The grayscale theme deliberately drains every hue to a calibrated grey ramp
+     (see the contrast note beside its palette). An inline accent would beat
+     those stylesheet rules outright, so it is simply not applied there. */
+  setAccent(s.theme!=='gray');
+
+  PROFILE.theme=THEMES.includes(s.theme)?s.theme:'dark';
+  applyTheme();
+}
 const saveRecipes=()=>gset('meal_recipes',JSON.stringify(RECIPES));
 const saveProducts=()=>gset('meal_products',JSON.stringify(PRODUCTS));
 const saveSupplements=()=>gset('meal_supplements',JSON.stringify(SUPPLEMENTS));
-const savePlan=()=>{ if(Object.keys(SHOP_DISMISSED).length){ SHOP_DISMISSED={}; saveShopDismissed(); } gset('meal_plan',JSON.stringify(PLAN)); };
+const savePlan=()=>{ if(Object.keys(SHOP_DISMISSED).length){ SHOP_DISMISSED={}; saveShopDismissed(); } gset('meal_plan',JSON.stringify(PLAN)); awardsCheck(); };
 const saveShopCustom=()=>gset('meal_shopcustom',JSON.stringify(SHOP_CUSTOM));
 const saveShopDismissed=()=>gset('meal_shopdismiss',JSON.stringify(SHOP_DISMISSED));
 const saveShopTicks=()=>gset('meal_shopticks',JSON.stringify(SHOP_TICKS));
@@ -2210,11 +2675,18 @@ const ALL_STORE_KEYS=[
   'meal_products','meal_products_v3','meal_profile','meal_recipe_amounts_v2',
   'meal_recipes','meal_shopbuy','meal_shopcustom','meal_shopdismiss','meal_shopnotes',
   'meal_shopticks','meal_supplements','meal_units_v4',
+  /* Which milestones have already been celebrated. Synced deliberately: without
+     it, opening the app on a second device would replay every tier and every
+     achievement you have ever earned as if they were new. */
+  'aerte5_awards',
+  /* Style presets. Synced so a look you built on the phone is the look on the
+     desk, and exported so it survives a wipe like everything else. */
+  'aerte5_style',
   SCHEMA_KEY,
 ];
 
 const saveWPlan    =()=>gset('aerte5_wplan',JSON.stringify(WPLAN));
-const saveWDone    =()=>gset('aerte5_wdone',JSON.stringify(WDONE));
+const saveWDone    =()=>{ const ok=gset('aerte5_wdone',JSON.stringify(WDONE)); awardsCheck(); return ok; };
 const saveWNotes   =()=>gset('aerte5_wnotes',JSON.stringify(WNOTES));
 const saveHealthLog=()=>gset('aerte5_healthlog',JSON.stringify(HEALTHLOG));
 const saveMsvg     =()=>gset('aerte5_msvg',JSON.stringify(MSVG));
@@ -2798,6 +3270,132 @@ function renderDaystrip(){
 }
 function refLabel(ref){ if(!ref) return ''; if(ref.type==='supplement') return sym('supplement'); if(ref.type==='mum') return sym('mum'); return ''; }
 function dayHasMum(day){ return ['breakfast','lunch','dinner','snack'].some(k=>(day[k]||[]).some(r=>r&&r.type==='mum')); }
+/* ============ VITAMINS ON THE DAY NOTE ============
+   A pull-tab on the bottom edge of the notes box that opens an icon picker.
+   It lives there rather than as another meal slot because a vitamin is not
+   food: it carries no macros, it should not move the kcal ring, and putting it
+   in a slot would make every day's dinner list read as half supplements.
+
+   Tokens are letter-marks, not drawn icons. Twelve pictograms for twelve
+   supplements would be twelve near-identical pills and capsules; "D", "Mg" and
+   "Ω3" are read instantly and are what is printed on the tub anyway.
+
+   Stored on the day as {id: amount} in the existing meal_plan key — no new
+   store key, no migration, and it syncs and exports with everything else. */
+const VITAMINS=[
+  {id:'multi', s:'M',   n:'Multivitamin', u:'tabs', c:'var(--orange)'},
+  {id:'d3',    s:'D',   n:'Vitamin D3',   u:'IU',   c:'#ffcf5e'},
+  {id:'c',     s:'C',   n:'Vitamin C',    u:'mg',   c:'#ff9f0a'},
+  {id:'b12',   s:'B12', n:'Vitamin B12',  u:'µg',   c:'var(--pink)'},
+  {id:'bcomp', s:'B',   n:'B-complex',    u:'tabs', c:'var(--red)'},
+  {id:'omega', s:'Ω3',  n:'Omega-3',      u:'mg',   c:'var(--teal)'},
+  {id:'mg',    s:'Mg',  n:'Magnesium',    u:'mg',   c:'var(--purple)'},
+  {id:'zn',    s:'Zn',  n:'Zinc',         u:'mg',   c:'var(--blue)'},
+  {id:'fe',    s:'Fe',  n:'Iron',         u:'mg',   c:'#d9603f'},
+  {id:'ca',    s:'Ca',  n:'Calcium',      u:'mg',   c:'var(--txt-2)'},
+  {id:'k2',    s:'K2',  n:'Vitamin K2',   u:'µg',   c:'var(--green)'},
+  {id:'probio',s:'Pro', n:'Probiotic',    u:'bn CFU',c:'var(--water-1)'},
+];
+const vitById=id=>VITAMINS.find(v=>v.id===id);
+function dayVits(day){ return (day&&day.vits&&typeof day.vits==='object')?day.vits:{}; }
+
+function vitTabHTML(day){
+  const vits=dayVits(day);
+  const taken=VITAMINS.filter(v=>vits[v.id]!=null);
+  /* Collapsed, the tab still reports: the tokens you took sit on the handle, so
+     the state is legible without opening anything. */
+  const summary=taken.length
+    ? taken.map(v=>`<span class="vt-mini" style="--vc:${v.c}">${esc(v.s)}</span>`).join('')
+    : `<span class="vt-plus">+</span>`;
+  return `<div class="vt" id="vitTab">
+    <button class="vt-handle" id="vitToggle" aria-expanded="false" aria-controls="vitPanel"
+      aria-label="${taken.length?taken.length+' supplement'+(taken.length===1?'':'s')+' logged — edit':'Log a supplement'}">
+      ${summary}<span class="vt-chev">⌃</span></button>
+    <div class="vt-panel" id="vitPanel" hidden>
+      <div class="vt-grid">${VITAMINS.map(v=>{
+        const on=vits[v.id]!=null;
+        return `<button class="vt-tok${on?' on':''}" data-vit="${v.id}" style="--vc:${v.c}"
+          aria-pressed="${on?'true':'false'}" title="${esc(v.n)}">
+          <span class="vt-s">${esc(v.s)}</span>
+          <span class="vt-amt">${on?esc(String(vits[v.id]||'')+' '+v.u):esc(v.n)}</span>
+        </button>`;
+      }).join('')}</div>
+      <div class="vt-edit" id="vitEdit" hidden></div>
+    </div>
+  </div>`;
+}
+
+function wireVitTab(key){
+  const wrap=document.getElementById('vitTab'); if(!wrap) return;
+  const day=ensureDay(key);
+  const panel=document.getElementById('vitPanel');
+  const toggle=document.getElementById('vitToggle');
+  const edit=document.getElementById('vitEdit');
+  let openId=null;
+
+  const repaint=()=>{
+    /* Redraws only this widget. Re-rendering the day card would collapse the
+       panel on every tap and, per the note on the water cells, replay every
+       meal group's entrance animation. */
+    const open=!panel.hidden;
+    wrap.outerHTML=vitTabHTML(day);
+    wireVitTab(key);
+    if(open){ const t=document.getElementById('vitToggle'); if(t) t.click(); }
+  };
+
+  toggle.onclick=()=>{
+    const show=panel.hidden;
+    panel.hidden=!show;
+    toggle.setAttribute('aria-expanded',show?'true':'false');
+    wrap.classList.toggle('open',show);
+  };
+
+  wrap.querySelectorAll('[data-vit]').forEach(b=>b.onclick=()=>{
+    const id=b.dataset.vit, v=vitById(id);
+    const vits=dayVits(day);
+    if(vits[id]!=null&&openId!==id){
+      /* Already logged and not currently being edited → open it for editing
+         rather than silently clearing it. Removal is an explicit button. */
+      openId=id;
+    } else if(openId===id){
+      openId=null; edit.hidden=true; edit.innerHTML=''; return;
+    } else {
+      openId=id;
+    }
+    const cur=vits[id]!=null?vits[id]:'';
+    edit.hidden=false;
+    edit.innerHTML=`<div class="vt-erow">
+        <span class="vt-en" style="--vc:${v.c}">${esc(v.n)}</span>
+        <input id="vitAmt" type="number" inputmode="decimal" step="any" min="0"
+          placeholder="amount" value="${esc(String(cur))}">
+        <span class="vt-eu">${esc(v.u)}</span>
+      </div>
+      <div class="vt-ebtns">
+        <button class="vt-save" id="vitSave">${vits[id]!=null?'Update':'Log it'}</button>
+        ${vits[id]!=null?`<button class="vt-rm" id="vitRm">Remove</button>`:''}
+      </div>`;
+    const inp=document.getElementById('vitAmt');
+    const commit=()=>{
+      day.vits=Object.assign({},dayVits(day));
+      /* A blank amount still logs the vitamin — "I took my D3" is the useful
+         fact, and being made to invent a number to record it is why supplement
+         logging gets abandoned. Stored as 0, shown as just the name. */
+      const n=inp.value.trim()===''?0:Math.max(0,+inp.value||0);
+      day.vits[id]=n;
+      savePlan(); openId=null; repaint(); toast(v.n+' logged');
+    };
+    document.getElementById('vitSave').onclick=commit;
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); commit(); } });
+    const rm=document.getElementById('vitRm');
+    if(rm) rm.onclick=()=>{
+      day.vits=Object.assign({},dayVits(day)); delete day.vits[id];
+      if(!Object.keys(day.vits).length) delete day.vits;
+      savePlan(); openId=null; repaint();
+    };
+    setTimeout(()=>{ const i=document.getElementById('vitAmt'); if(i) i.focus(); },60);
+  });
+}
+
 function renderMealSlotRow(day,s){
   const refs=day[s.k]||[];
   const noun=s.k==='snack'?'snack':s.k;
@@ -2832,7 +3430,9 @@ function renderDayDetail(){
   for(let i=0;i<WATER_TARGET;i++) html+=`<div class="wcell ${i<(day.water||0)?'on':''}" data-w="${i}"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3c4 5 7 8.5 7 12a7 7 0 1 1-14 0c0-3.5 3-7 7-12z" stroke="currentColor" stroke-width="2" fill="${i<(day.water||0)?'currentColor':'none'}"/></svg></div>`;
   html+=`</div></div>`;
 
-  html+=`<div data-sec="notes" class="field"><label>Day notes</label><textarea id="dayNotesF" placeholder="How you felt, swaps, anything…">${day.notes||''}</textarea></div></div>`;
+  html+=`<div data-sec="notes" class="field"><label>Day notes</label>
+    <div class="note-wrap"><textarea id="dayNotesF" placeholder="How you felt, swaps, anything…">${day.notes||''}</textarea>
+    ${vitTabHTML(day)}</div></div></div>`;
 
   document.getElementById('dayDetail').innerHTML=html;
   applyDayLayout();
@@ -2860,6 +3460,7 @@ function renderDayDetail(){
     mQuiet(()=>renderSumCard());
   }));
   document.getElementById('dayNotesF').addEventListener('input',e=>{day.notes=e.target.value;savePlan();});
+  wireVitTab(key);
 }
 
 function applyWeekLayout(){
@@ -3020,13 +3621,20 @@ scrim.onclick=closeSheet;
 /* ===== unified item picker: recipes + products + supplements ===== */
 function openItemPicker(dayKey,slot,startCat){
   let q='',cat=startCat||'recipe';
+  /* Snap leads the row rather than trailing it. The bar scrolls horizontally on a
+     phone, so last place is off-screen — and the one control here that does
+     something the others can't shouldn't need a swipe to find. "Mum's cooking"
+     is gone as a tab: it was a bare macro form, and every way of filling that
+     form in now lives inside Snap, including typing the numbers yourself. The
+     'mum' REF TYPE is untouched — it is still what every free-form entry is
+     stored as, so old days and the v-whatever migration keep working. */
   const catBar=()=>`<div class="filt" style="margin-top:10px">
+        <button class="snap-chip${cat==='snap'?' on':''}" data-cat="snap"
+          aria-label="Snap — describe or photograph food"><span class="snap-ic">${GH_ICON.ai}</span><span class="snap-ic">${GH_ICON.camera}</span>Snap</button>
         <button class="${cat==='recipe'?'on':''}" data-cat="recipe">Recipes</button>
         <button class="${cat==='product'?'on':''}" data-cat="product">Products</button>
         <button class="${cat==='fridge'?'on':''}" data-cat="fridge">Fridge</button>
         <button class="${cat==='supplement'?'on':''}" data-cat="supplement">Supplements</button>
-        <button class="${cat==='mum'?'on':''}" data-cat="mum">Mum's cooking</button>
-        <button class="${cat==='snap'?'on':''}" data-cat="snap">${GH_ICON.camera} Snap</button>
       </div>`;
   const render=()=>{
     let html=`<h3>Add to ${slot==='snack'?'Snacks':cap(slot)}</h3>${catBar()}`;
@@ -3034,32 +3642,16 @@ function openItemPicker(dayKey,slot,startCat){
     if(cat==='snap'){
       openSheet(html+snapPaneHTML());
       sInner.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{cat=b.dataset.cat;render();});
-      const su=document.getElementById('snapSetup');
-      if(su) su.onclick=()=>openSnapSetup({dayKey,slot});
-      const st=document.getElementById('snapSettings');
-      if(st) st.onclick=()=>openSnapSetup({dayKey,slot});
+      const target={dayKey,slot};
+      const wire=(id,fn)=>{ const el=document.getElementById(id); if(el) el.onclick=fn; };
+      wire('snapSetup',   ()=>openSnapSetup(target));
+      wire('snapSettings',()=>openSnapSetup(target));
+      wire('snapSay',     ()=>snapDescribe(target));
+      wire('snapManual',  ()=>snapManual(target));
       ['snapCam','snapLib'].forEach(id=>{
         const inp=document.getElementById(id);
-        if(inp) inp.onchange=e=>snapHandleFile(e.target.files&&e.target.files[0],{dayKey,slot});
+        if(inp) inp.onchange=e=>snapHandleFile(e.target.files&&e.target.files[0],target);
       });
-      return;
-    }
-
-    if(cat==='mum'){
-      html+=`<div class="field" style="margin-top:14px"><label>What was it</label><input id="mmName" placeholder="e.g. Mum's borscht"></div>
-        <div class="field2"><div class="field" style="margin-top:0"><label>Kcal</label><input id="mmKcal" type="number" placeholder="e.g. 550"></div><div class="field" style="margin-top:0"><label>Protein g</label><input id="mmProtein" type="number" placeholder="e.g. 30"></div></div>
-        <div class="field2"><div class="field" style="margin-top:0"><label>Carbs g</label><input id="mmCarbs" type="number" placeholder="e.g. 60"></div><div class="field" style="margin-top:0"><label>Fat g</label><input id="mmFat" type="number" placeholder="e.g. 18"></div></div>
-        <button class="cta red" id="mmAdd">Add to ${slot==='snack'?'Snacks':cap(slot)}</button>
-        <button class="cta ghost" id="pkBack">Cancel</button>`;
-      openSheet(html);
-      sInner.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{cat=b.dataset.cat;render();});
-      document.getElementById('mmAdd').onclick=()=>{
-        const day=ensureDay(dayKey);
-        const ref={type:'mum',name:document.getElementById('mmName').value.trim()||"Mum's cooking",kcal:+document.getElementById('mmKcal').value||0,protein:+document.getElementById('mmProtein').value||0,carbs:+document.getElementById('mmCarbs').value||0,fat:+document.getElementById('mmFat').value||0};
-        day[slot].push(ref);
-        savePlan();closeSheet();renderSumCard();renderDaystrip();renderDayDetail();
-      };
-      document.getElementById('pkBack').onclick=closeSheet;
       return;
     }
 
@@ -3092,7 +3684,7 @@ function openItemPicker(dayKey,slot,startCat){
       : cat==='product'?PRODUCTS.map(p=>({ref:{type:'product',id:p.id},label:p.name,search:`${p.name} ${p.unit||''}`.toLowerCase(),meta:`${p.kcal} kcal / ${p.unit}`}))
       : SUPPLEMENTS.map(s=>({ref:{type:'supplement',id:s.id},label:s.name,search:`${s.name} ${s.brand||''}`.toLowerCase(),meta:`${s.kcal} kcal / ${s.serving}`}));
     pool=pool.filter(x=>x.search.includes(q));
-    if(cat==='product') html+=`<button class="cta ghost" id="pkScan" style="margin-top:12px">⌷ Scan a barcode</button>`;
+    if(cat==='product') html+=`<button class="cta ghost" id="pkScan" style="margin-top:12px"><span class="ic-in">${GH_ICON.barcode}</span>Scan a barcode</button>`;
     html+=`<div class="field" style="margin-top:6px"><input id="pkS" placeholder="Search name or tag…" value="${q}"></div><div id="pkList">`;
     if(!pool.length)html+=`<div class="empty">${
       cat==='recipe'?'No recipes yet — add one from the Recipes tab.'
@@ -3355,6 +3947,33 @@ function openRecipeEditor(id){
 }
 
 /* ============ PRODUCTS & SUPPLEMENTS EDITORS ============ */
+/* ============ NUTRI-SCORE ============
+   Shown, never computed. The real algorithm scores sugars, saturated fat and
+   salt, and Aerte stores none of the three — only kcal, protein, carbs, fat and
+   fibre. A grade derived from those would be a guess wearing the uniform of an
+   official rating, which is worse than no grade at all. So: display what Open
+   Food Facts sent with the barcode, and offer to go and fetch it when it wasn't.
+
+   Official palette, because the colours ARE the mark — a Nutri-Score in the
+   wrong greens is just a coloured letter. */
+const NUTRI_COLORS={a:'#038141',b:'#85bb2f',c:'#fecb02',d:'#ee8100',e:'#e63e11'};
+const NUTRI_WORD={a:'Best choice',b:'Good choice',c:'Middling',d:'Poor',e:'Worst choice'};
+function nutriscoreHTML(grade){
+  const g=String(grade||'').trim().toLowerCase();
+  if(!NUTRI_COLORS[g]) return '';
+  const cells=['a','b','c','d','e'].map(x=>{
+    const on=x===g;
+    /* Dark letters on the yellow band; white everywhere else. C at #fecb02 with
+       white type is unreadable, and that band is the most common grade there is. */
+    const ink=(x==='c')?'#1a1a1a':'#fff';
+    return `<span class="ns-cell${on?' on':''}" style="--nc:${NUTRI_COLORS[x]};color:${ink}">${x.toUpperCase()}</span>`;
+  }).join('');
+  return `<div class="ns-wrap" role="img" aria-label="Nutri-Score ${g.toUpperCase()} — ${NUTRI_WORD[g]}">
+    <div class="ns-bar">${cells}</div>
+    <div class="ns-cap">Nutri-Score <b style="color:${NUTRI_COLORS[g]}">${g.toUpperCase()}</b> · ${NUTRI_WORD[g]}</div>
+  </div>`;
+}
+
 function openProductEditor(id,opts){
   opts=opts||{};
   const isNew=!id; const p=isNew?{id:'p'+Date.now(),name:'',unit:'100g',price:0,kcal:0,protein:0,carbs:0,fat:0,fiber:0,amountMode:'default',defaultAmount:1,baseUnit:'g',unitSize:100}:prodById(id);
@@ -3362,7 +3981,10 @@ function openProductEditor(id,opts){
      stay editable and nothing enters the library until the user presses Save. */
   if(isNew&&opts.prefill) Object.assign(p,opts.prefill);
   const bu=p.baseUnit||'g', us=p.unitSize||1;
+  const nsBlock=nutriscoreHTML(p.nutriscore)||
+    (p.barcode?`<button class="cta ghost" id="qNsFetch" style="margin-top:14px">Look up Nutri-Score</button>`:'');
   openSheet(`<h3>${isNew?'New Product':'Edit Product'}</h3><div class="meta">Macros are per ONE priced unit. Base unit is how you count stock &amp; log meals (g / ml / pcs).</div>
+    ${nsBlock}
     <div class="field2" style="margin-top:14px"><div class="field" style="margin-top:0"><label>Name</label><input id="qName" value="${p.name}" placeholder="e.g. Milk"></div><div class="field" style="margin-top:0"><label>Priced unit label</label><input id="qUnit" value="${p.unit}" placeholder="e.g. 100g / 1 item"></div></div>
     <div class="field2"><div class="field" style="margin-top:0"><label>Base unit</label><select id="qBase"><option value="g" ${bu==='g'?'selected':''}>grams (g)</option><option value="ml" ${bu==='ml'?'selected':''}>millilitres (ml)</option><option value="pcs" ${bu==='pcs'?'selected':''}>pieces (pcs)</option></select></div><div class="field" style="margin-top:0"><label>Base units per priced unit</label><input id="qUnitSize" type="number" step="0.1" min="0.01" value="${us}"></div></div>
     <p style="font-size:11px;color:var(--txt-3);margin:6px 2px 0;line-height:1.5">e.g. priced unit "100g" → base <b>g</b>, size <b>100</b>. "1 egg" → base <b>pcs</b>, size <b>1</b>. Macros above are for one priced unit (one 100g, one egg).</p>
@@ -3384,6 +4006,25 @@ function openProductEditor(id,opts){
   };
   const d=document.getElementById('qDel');if(d)d.onclick=async()=>{PRODUCTS=PRODUCTS.filter(x=>x.id!==id);await saveProducts();closeSheet();renderProdGrid();};
   document.getElementById('qCancel').onclick=opts.returnTo==='shopPicker'?openProductToShopPicker:closeSheet;
+  const nf=document.getElementById('qNsFetch');
+  if(nf) nf.onclick=async()=>{
+    nf.disabled=true; nf.textContent='Looking up…';
+    try{
+      const d2=await offLookup(p.barcode);
+      if(d2&&d2.nutriscore){
+        /* Written onto the product and saved immediately. Leaving it to the Save
+           button would lose it if the user backs out, and re-fetching a value
+           the API already gave us is the one thing worth avoiding here. */
+        p.nutriscore=d2.nutriscore;
+        if(!isNew){ await saveProducts(); }
+        nf.outerHTML=nutriscoreHTML(p.nutriscore);
+      } else {
+        nf.disabled=false; nf.textContent='No Nutri-Score published for this barcode';
+      }
+    }catch(e){
+      nf.disabled=false; nf.textContent='Lookup failed — tap to retry';
+    }
+  };
 }
 /* ============ BODY WEIGHT INTAKE ============
    A web page cannot read HealthKit and iOS Safari has no Web Bluetooth, so the
@@ -3783,6 +4424,7 @@ async function ghPull(daysBack,manual){
   if(!tok){ ghSet('reauth','Google sign-in expired — tap to reconnect'); return 0; }
 
   const rows={};   // date key -> partial healthRecord entry
+  const weighed={};// date key -> true, for scale readings, which bypass `rows`
   const put=(k,f,v)=>{ if(!k||!(v>0)) return; (rows[k]=rows[k]||{date:k})[f]=v; };
   /* The consent screen lets a user untick individual scopes, and Google asks
      apps to survive that. Swallowing the failure silently is the wrong kind of
@@ -3801,7 +4443,17 @@ async function ghPull(daysBack,manual){
         filter:field+'.date >= "'+addDays(todayKey(),-daysBack)+'"', page_size:'400',
       }),tok).then(j=>j.dataPoints||[]));
 
-    const [steps,active,sleep,kcal,azm,dist,hrv,rhr,vo2,acts]=await Promise.all([
+    /* Scale readings are SAMPLE records, not daily rollups and not intervals, so
+       they filter on `<type>.sample_time.civil_time` rather than `.date` or
+       `.interval.*`. Civil time again, for the same reason ghKeyOf uses it: a
+       weigh-in belongs to the date on the scale's clock, not to whatever date
+       that instant maps to once it has been through UTC and back. */
+    const sample=(type,field,label)=>soft(label,ghFetch(
+      '/users/me/dataTypes/'+type+'/dataPoints?'+new URLSearchParams({
+        filter:field+'.sample_time.civil_time >= "'+addDays(todayKey(),-daysBack)+'"', page_size:'400',
+      }),tok).then(j=>j.dataPoints||[]));
+
+    const [steps,active,sleep,kcal,azm,dist,hrv,rhr,vo2,acts,weight,bodyfat]=await Promise.all([
       ghRollup(tok,'steps',daysBack),
       soft('active minutes',ghRollup(tok,'active-minutes',daysBack)),
       soft('sleep',ghFetch('/users/me/dataTypes/sleep/dataPoints?'+new URLSearchParams({
@@ -3818,6 +4470,8 @@ async function ghPull(daysBack,manual){
         filter:'exercise.interval.civil_start_time >= "'+addDays(todayKey(),-daysBack)+'T00:00:00"',
         page_size:'200',
       }),tok).then(j=>j.dataPoints||[])),
+      sample('weight','weight','weight'),
+      sample('body-fat','body_fat','body fat'),
     ]).then(r=>r.map((x,i)=>i===0?x:(x||[])));
 
     steps.forEach(p=>put(ghKeyOf(p),'steps',+((p.steps||{}).countSum||0)));
@@ -3915,6 +4569,52 @@ async function ghPull(daysBack,manual){
       byDay[k].sort((a,b)=>String(a.at).localeCompare(String(b.at)));
       (rows[k]=rows[k]||{date:k}).acts=byDay[k];
     }
+
+    /* ---- scale readings ----
+       The health_metrics scope was already being asked for and granted; nothing
+       was ever reading the weight data type with it, which is why weigh-ins kept
+       arriving only from the Shortcut. Weight does NOT go through healthRecord:
+       it has its own funnel, weightRecord(), which owns the 500 kg sanity bound
+       and the `src` stamp that weightCommit() reads to decide whether to move
+       PROFILE.weight. Running it before the healthRecord loop matters — both
+       merge onto HEALTHLOG[key] rather than replacing it, so kg survives the
+       steps/sleep write that follows, but not the other way round.
+
+       civilTime comes back as {date,time} on some types and as a bare ISO string
+       on others; physicalTime is the last resort. */
+    const sampleKey=o=>{
+      const st=(o&&o.sampleTime)||{};
+      const c=st.civilTime;
+      if(c&&c.date&&c.date.year) return civil(c);
+      if(typeof c==='string'&&/^\d{4}-\d{2}-\d{2}/.test(c)) return c.slice(0,10);
+      if(st.physicalTime&&!isNaN(new Date(st.physicalTime))) return keyOf(new Date(st.physicalTime));
+      return null;
+    };
+    /* Unit-suffixed field names are this API's house style (distanceMillimeters,
+       caloriesKcal, beatsPerMinute), but the weight sample's exact spelling isn't
+       in the published schema. Reading every plausible name costs nothing and
+       beats shipping a stream that silently returns zero. */
+    const numOf=(o,names)=>{ for(const n of names){ const v=+(o||{})[n]; if(v>0) return v; } return 0; };
+    const scale={};   // date key -> {kg?, fat?}
+    weight.forEach(d=>{
+      const o=d.weight||{}, k=sampleKey(o);
+      const kg=numOf(o,['weightKilograms','kilograms','weightKg','value']);
+      /* Two weigh-ins in a day: the later one wins, which is the same rule the
+         manual editor follows when you correct a number. */
+      if(k&&kg>0) (scale[k]=scale[k]||{}).kg=kg;
+    });
+    bodyfat.forEach(d=>{
+      const o=d.bodyFat||d['body-fat']||{}, k=sampleKey(o);
+      const pct=numOf(o,['percentage','bodyFatPercentage','percent','value']);
+      if(k&&pct>0) (scale[k]=scale[k]||{}).fat=pct;
+    });
+    for(const k in scale){
+      /* A body-fat reading with no weight beside it has nothing to attach to —
+         weightRecord is keyed on kg and rejects the row outright — so carry the
+         day's last known weight forward rather than dropping the measurement. */
+      const kg=scale[k].kg||+((HEALTHLOG[k]||{}).kg)||0;
+      if(kg>0&&weightRecord({kg,fat:scale[k].fat,date:k},'google')) weighed[k]=true;
+    }
   }catch(e){
     /* Steps is the one stream that isn't optional, so its failure is the pull's.
        A 403 here is nearly always the scope, not the data. */
@@ -3927,6 +4627,11 @@ async function ghPull(daysBack,manual){
 
   let n=0;
   for(const k in rows) if(healthRecord(rows[k])) n++;
+  /* A day whose only news is a weigh-in never gets a `rows` entry, so the loop
+     above cannot see it. Without this, a morning on the scale and nothing else
+     reported "Google Health had nothing new" and never called weightCommit —
+     which is what persists HEALTHLOG at all. */
+  for(const k in weighed) if(!rows[k]) n++;
   if(n) await weightCommit(n,'google');
   GH_ST.lastOkAt=Date.now(); GH_ST.days=n; saveGHState();
   ghSet(lost.length?'error':'idle',
@@ -3982,7 +4687,7 @@ function ghExpiryNote(){
 
 function openGoogleHealth(){
   openSheet(`<h3>Google Health</h3>
-    <div class="meta">Pulls steps, distance, sleep stages, heart rate, readiness and detected workouts from your Fitbit Air. The client ID, secret and sign-in stay on this device; they are never put in the gist or in a backup file.</div>
+    <div class="meta">Pulls steps, distance, sleep stages, heart rate, readiness, weight and detected workouts from your Fitbit Air. The client ID, secret and sign-in stay on this device; they are never put in the gist or in a backup file.</div>
     <div id="ghBody"></div>`);
   renderGHBody();
 }
@@ -4096,7 +4801,36 @@ const GH_ICON={
   eye:    GHI_A+'<path d="M2.6 12S6 6.6 12 6.6 21.4 12 21.4 12 18 17.4 12 17.4 2.6 12 2.6 12Z"/><circle cx="12" cy="12" r="2.6"/></svg>',
   eyeOff: GHI_A+'<path d="M4.2 9.2C3.1 10.4 2.6 12 2.6 12s3.4 5.4 9.4 5.4c1.3 0 2.4-.2 3.4-.6"/><path d="M9.6 6.9c.8-.2 1.6-.3 2.4-.3 6 0 9.4 5.4 9.4 5.4s-.8 1.3-2.2 2.6"/><path d="M4 4l16 16"/></svg>',
   scale:  GHI_A+'<rect x="3.4" y="5.4" width="17.2" height="13.2" rx="3"/><path d="M12 9.2v2.4"/><path d="M8.6 15.2a3.4 3.4 0 0 1 6.8 0"/></svg>',
+  /* Open arc plus arrowhead rather than a closed ring: the gap is what reads as
+     "go round again" at 24px, where a full circle just reads as a circle. */
+  retry:  GHI_A+'<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.2v4.2h-4.2"/></svg>',
+  /* The "ask the model" mark. Deliberately a generic sparkle and not a likeness
+     of any vendor's logo — the repo is public and this ships as a real installed
+     app, so borrowing someone's trademark for a button is not on. Two four-point
+     stars, the small one offset, which is the one shape everyone already reads as
+     "generated". Quadratic curves with their control point at the star's own
+     centre give the concave waist for free — no arcs, no second path per point. */
+  ai:     GHI_A+'<path d="M10 5.8Q10 13 17.2 13Q10 13 10 20.2Q10 13 2.8 13Q10 13 10 5.8Z"/><path d="M18.3 2.6Q18.3 6 21.7 6Q18.3 6 18.3 9.4Q18.3 6 14.9 6Q18.3 6 18.3 2.6Z"/></svg>',
+  /* Replaces the ⌷ character the scan buttons used to borrow. That glyph is APL
+     Quad — it renders as a hollow box in most system fonts, sits on the text
+     baseline rather than optically centred, and carries no meaning at all. Real
+     barcodes read as barcodes because the bar WIDTHS vary, so this is two paths
+     at different stroke weights rather than one evenly-spaced comb, which would
+     read as a fence. */
+  barcode:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true">'+
+          '<path d="M4.2 6v12M10.6 6v12M16.4 6v12" stroke-width="2.4"/>'+
+          '<path d="M7.6 6v12M13.4 6v12M19.8 6v12" stroke-width="1.2"/></svg>',
 };
+
+/* Markup that lives in <body> is authored long before GH_ICON exists, which is
+   why those buttons used to borrow whatever single character looked closest.
+   Tag an empty span data-ghicon="name" there and this fills it in on boot. */
+function paintStaticIcons(root){
+  (root||document).querySelectorAll('[data-ghicon]').forEach(el=>{
+    const ic=GH_ICON[el.dataset.ghicon];
+    if(ic&&!el.firstChild) el.innerHTML=ic;
+  });
+}
 
 /* ---- readiness ----
    NOT a field the API returns. Fitbit's own Daily Readiness Score is a Premium
@@ -4270,6 +5004,7 @@ function renderHealth(){
     sleepCardHTML(key)+
     hrCardHTML(key)+
     cardioCardHTML()+
+    trendsCardHTML()+
     waterCardHTML(key)+
     weightCardHTML2()+
     actsCardHTML(key);
@@ -4279,6 +5014,9 @@ function renderHealth(){
   });
   host.querySelectorAll('[data-hcard]').forEach(b=>b.onclick=()=>{
     HEALTH_CARDIO=b.dataset.hcard; renderHealth();
+  });
+  host.querySelectorAll('[data-htrend]').forEach(b=>b.onclick=()=>{
+    HEALTH_TREND=b.dataset.htrend; renderHealth();
   });
   /* Applied synchronously, not in requestAnimationFrame. The rAF callback was
      never running here: something re-renders this host between the frame being
@@ -4431,23 +5169,109 @@ function stepsCardHTML(key){
    Awake shifts, from alarm red to orange, which suits waking better anyway. */
 const STAGE_ROWS=[{code:3,n:'Awake',c:'var(--orange)'},{code:2,n:'REM',c:'var(--water-1)'},
                   {code:1,n:'Light',c:'var(--blue)'},{code:0,n:'Deep',c:'var(--purple)'}];
+/* ---- restlessness ----
+   Sleep score already answers "was that a good night". Restlessness answers a
+   different question — "how broken was it" — and the two genuinely come apart:
+   eight hours chopped into fifteen pieces scores respectably on duration and
+   still leaves you wrecked.
+
+   Three components, because any one alone is gameable. Minutes awake misses the
+   night you never fully woke but never settled either. A count of awakenings
+   misses the single 90-minute stare at the ceiling. Stage churn catches the
+   shallow, restless night that never technically wakes at all. */
+function sleepRestless(rec){
+  const asleepMin=(+rec.sleep||0)*60;
+  if(!(asleepMin>0)) return null;
+  const seg=Array.isArray(rec.seg)?rec.seg:null;
+  let awakeMin=+rec.awake||0, wakes=0, trans=0;
+  if(seg&&seg.length){
+    awakeMin=0;
+    seg.forEach((x,i)=>{
+      if(x[2]===3){
+        awakeMin+=x[1];
+        /* Under two minutes is a turn-over, not an awakening. Counting those
+           would score every normal sleeper as an insomniac. */
+        if(x[1]>=2) wakes++;
+      }
+      if(i&&x[2]!==seg[i-1][2]) trans++;
+    });
+  }
+  const hours=Math.max(1,(asleepMin+awakeMin)/60);
+  const cAwake=Math.min(1,awakeMin/60);         // an hour awake maxes this out
+  const cWakes=Math.min(1,wakes/8);
+  const cFrag =Math.min(1,(trans/hours)/10);
+  return {
+    score:Math.round((cAwake*0.45+cWakes*0.30+cFrag*0.25)*100),
+    awakeMin:Math.round(awakeMin), wakes, perHour:+(trans/hours).toFixed(1),
+    detailed:!!(seg&&seg.length),
+  };
+}
+
+/* The trace over the hypnogram. Each stage is scored for how close to the
+   surface it is, sampled on a fixed grid, then lightly smoothed — so the line
+   shows WHEN the night came apart, which the lane blocks below cannot: they say
+   what happened, never how disturbed the run of it was. */
+const RESTLESS_WEIGHT={3:1, 1:0.38, 2:0.18, 0:0};   // awake, light, rem, deep
+function restlessTrace(seg,span,W,H){
+  const N=64, step=span/N, raw=new Array(N).fill(0);
+  for(let i=0;i<N;i++){
+    const a=i*step, b=a+step;
+    let acc=0, cov=0;
+    seg.forEach(([o,d,c])=>{
+      const lo=Math.max(a,o), hi=Math.min(b,o+d);
+      if(hi<=lo) return;
+      acc+=(hi-lo)*(RESTLESS_WEIGHT[c]||0); cov+=(hi-lo);
+    });
+    raw[i]=cov>0?acc/cov:0;
+  }
+  /* Three-tap smoothing. Without it the line is a square wave that just repeats
+     the blocks underneath in a thinner form. */
+  const sm=raw.map((v,i)=>(raw[Math.max(0,i-1)]+v*2+raw[Math.min(N-1,i+1)])/4);
+  const xOf=i=>(i/(N-1))*W, yOf=v=>H-2-v*(H-6);
+  const pts=sm.map((v,i)=>xOf(i).toFixed(1)+','+yOf(v).toFixed(1)).join(' ');
+  return {line:pts, area:`0,${H} ${pts} ${W},${H}`};
+}
+
 function sleepCardHTML(key){
   const rec=HEALTHLOG[key]||{};
   const h=+rec.sleep||0;
   if(!h&&!(+rec.deep)) return card('Sleep','',`<div class="gh-empty">Nothing recorded for this night.</div>`);
   const ss=sleepScore(rec), seg=Array.isArray(rec.seg)?rec.seg:null;
   const quality=ss>=80?{t:'Good',c:'var(--green)'}:ss>=60?{t:'Fair',c:'var(--orange)'}:{t:'Poor',c:'var(--red)'};
+  const rl=sleepRestless(rec);
+  /* Low restlessness is the good end, so the colour ramp runs the opposite way
+     to the sleep score beside it. */
+  const rq=!rl?null:rl.score<=25?{t:'Settled',c:'var(--green)'}
+    :rl.score<=50?{t:'Broken',c:'var(--orange)'}:{t:'Restless',c:'var(--red)'};
 
-  /* Two figures side by side as plain type on the card's own surface. Boxing
-     them would put cards inside a card, which is never the right container. */
-  let body=`<div class="gh-figs">
+  /* Figures side by side as plain type on the card's own surface. Boxing them
+     would put cards inside a card, which is never the right container. */
+  /* Restlessness makes this a third figure, so the row has to be told. Left on
+     the two-column default it wrapped and put "44 / Broken" on its own line
+     under "7h 0m", reading as a caption for the duration rather than as a
+     sibling measure. */
+  const figN=1+(ss?1:0)+(rl?1:0);
+  let body=`<div class="gh-figs${figN===3?' gh-figs-3':''}">
     <div><span class="gh-fv">${fmtMin(h*60)}</span><span class="gh-fl">asleep</span></div>
     ${ss?`<div><span class="gh-fv">${ss}<span class="gh-fu">/100</span></span>
       <span class="gh-fl" style="color:${quality.c}">${quality.t}</span></div>`:''}
+    ${rl?`<div><span class="gh-fv">${rl.score}<span class="gh-fu">/100</span></span>
+      <span class="gh-fl" style="color:${rq.c}">${rq.t}</span></div>`:''}
   </div>`;
 
   if(seg&&seg.length){
     const span=Math.max(1,...seg.map(x=>x[0]+x[1]));
+    const RW=300, RH=46, tr=restlessTrace(seg,span,RW,RH);
+    body+=`<div class="gh-rest">
+      <div class="gh-lh"><span>Restlessness</span><i>${rl.wakes} wake${rl.wakes===1?'':'s'} · ${fmtMin(rl.awakeMin)} awake</i></div>
+      <svg viewBox="0 0 ${RW} ${RH}" preserveAspectRatio="none" class="gh-restsvg" aria-hidden="true">
+        <defs><linearGradient id="rlg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="var(--orange)" stop-opacity=".3"/>
+          <stop offset="1" stop-color="var(--orange)" stop-opacity="0"/></linearGradient></defs>
+        <polygon points="${tr.area}" fill="url(#rlg)"/>
+        <polyline points="${tr.line}" fill="none" stroke="var(--orange)" stroke-width="1.6"
+          stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+      </svg></div>`;
     body+=`<div class="gh-hyp" id="ghHyp" data-span="${span}">
       <svg class="gh-links" aria-hidden="true"></svg>
       ${STAGE_ROWS.map(st=>{
@@ -4563,7 +5387,9 @@ async function paintHrCurve(key){
   const pl=thin.map(p=>xOf(p.t).toFixed(1)+','+yOf(p.bpm).toFixed(1)).join(' ');
   const area=`${xOf(thin[0].t).toFixed(1)},${H} `+pl+` ${xOf(thin[thin.length-1].t).toFixed(1)},${H}`;
   const rest=+(HEALTHLOG[key]||{}).rhr||0;
-  host.innerHTML=`<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="display:block">
+  host.innerHTML=`<div class="hr-stage">
+    <div class="hr-read" id="hrRead" aria-live="off"><b>–</b><i>–</i></div>
+    <svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="display:block">
     <defs><linearGradient id="hrg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="var(--red)" stop-opacity=".22"/>
       <stop offset="1" stop-color="var(--red)" stop-opacity="0"/></linearGradient></defs>
@@ -4572,39 +5398,422 @@ async function paintHrCurve(key){
     <polygon points="${area}" fill="url(#hrg)"/>
     <polyline points="${pl}" fill="none" stroke="var(--red)" stroke-width="1.5"
       stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
-  </svg>
+    <g id="hrScrub" class="hr-scrub">
+      <line y1="0" y2="${H}" stroke="var(--txt-3)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+      <circle r="4" fill="var(--bg-1)" stroke="var(--red)" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+    </g>
+    </svg>
+    <div class="hr-grab" id="hrGrab" role="slider" tabindex="0"
+      aria-label="Scrub the day's heart rate" aria-valuemin="0" aria-valuemax="1439"></div>
+  </div>
   <div class="gh-axis"><span>00:00</span><span>12:00</span><span>24:00</span></div>`;
+
+  /* ---- scrubber ----
+     The curve held a whole day of heart rate and there was no way to ask it
+     anything: the figures underneath gave you the day's low, average and peak,
+     but not WHEN any of it happened. Dragging answers that.
+
+     Positions map through the host's width as a FRACTION rather than through
+     viewBox units. The svg is preserveAspectRatio="none" and its viewBox width
+     was measured once at render, so the two only agree until something resizes
+     the card — a fraction survives that, a pixel offset does not. */
+  const stage=host.querySelector('.hr-stage');
+  const grab=host.querySelector('#hrGrab');
+  const scrub=host.querySelector('#hrScrub');
+  const read=host.querySelector('#hrRead');
+  if(!stage||!grab||!scrub||!read) return;
+  const sLine=scrub.querySelector('line'), sDot=scrub.querySelector('circle');
+  const hhmm=mins=>String(Math.floor(mins/60)).padStart(2,'0')+':'+String(Math.floor(mins%60)).padStart(2,'0');
+
+  let frac=null;
+  const place=f=>{
+    frac=Math.max(0,Math.min(1,f));
+    const t=d0+frac*span;
+    /* Nearest sample by time, not by index: `thin` is evenly spaced only when
+       the watch recorded continuously, and it very often did not. */
+    let best=thin[0], bd=Infinity;
+    for(const p of thin){ const dd=Math.abs(p.t-t); if(dd<bd){ bd=dd; best=p; } }
+    /* More than 20 minutes from any sample means the watch was off the wrist —
+       say so rather than drawing a confident dot on an invented reading. */
+    const gap=bd>20*60000;
+    const x=frac*W;
+    sLine.setAttribute('x1',x.toFixed(1)); sLine.setAttribute('x2',x.toFixed(1));
+    sDot.setAttribute('cx',(gap?x:xOf(best.t)).toFixed(1));
+    sDot.setAttribute('cy',(gap?H/2:yOf(best.bpm)).toFixed(1));
+    sDot.style.opacity=gap?0:1;
+    scrub.classList.add('on'); stage.classList.add('has-scrub');
+    read.innerHTML=gap
+      ? `<b>–</b><i>${esc(hhmm(frac*1440))} · no reading</i>`
+      : `<b>${best.bpm}<u>bpm</u></b><i>${esc(hhmm((best.t-d0)/60000))}</i>`;
+    /* Clamped so the pill never hangs off either end of the card. */
+    read.style.left=(Math.max(6,Math.min(94,frac*100)))+'%';
+    grab.setAttribute('aria-valuenow',Math.round(frac*1439));
+    grab.setAttribute('aria-valuetext',(gap?'no reading':best.bpm+' bpm')+' at '+hhmm(frac*1440));
+  };
+  const fracOf=e=>{
+    const r=stage.getBoundingClientRect();
+    return r.width?((e.clientX-r.left)/r.width):0;
+  };
+  let dragging=false;
+  grab.addEventListener('pointerdown',e=>{
+    dragging=true;
+    /* Capture on the element, so a finger that slides off the card keeps
+       scrubbing instead of silently dropping the gesture. */
+    grab.setPointerCapture&&grab.setPointerCapture(e.pointerId);
+    stage.classList.add('scrubbing'); place(fracOf(e)); e.preventDefault();
+  });
+  grab.addEventListener('pointermove',e=>{ if(dragging){ place(fracOf(e)); e.preventDefault(); } });
+  const end=()=>{ dragging=false; stage.classList.remove('scrubbing'); };
+  grab.addEventListener('pointerup',end);
+  grab.addEventListener('pointercancel',end);
+  /* Keyboard: the desk half of this app can scrub too. 15 minutes a press,
+     an hour with shift. */
+  grab.addEventListener('keydown',e=>{
+    const d={ArrowLeft:-1,ArrowRight:1}[e.key];
+    if(!d) return;
+    const stepMin=(e.shiftKey?60:15)/1440;
+    place((frac==null?0.5:frac)+d*stepMin); e.preventDefault();
+  });
+}
+
+/* ============ CARDIO LOAD ============
+   The card used to read Active Zone Minutes and nothing else. AZM is a
+   Fitbit-computed field, so a device that doesn't publish it left every bar
+   sitting on the 2px "zero" track while active minutes and kcal beside it read
+   perfectly — which looks exactly like a graph that failed to render, and sent
+   me looking at the drawing code. Nothing was wrong with the drawing code. It
+   was faithfully plotting a stream of zeroes.
+
+   Load is now a ladder, best source first, and the card SAYS which rung it is
+   standing on. Silently swapping in a derived number would trade a visible
+   bug for an invisible one. */
+const HR_MAX=()=>Math.max(150,220-(+PROFILE.age||25));
+
+/* Fitbit's own weighting, which is what makes the fallback comparable to the
+   real thing: a minute in fat-burn counts once, a minute at cardio or peak
+   counts twice, and anything under half of max heart rate counts for nothing. */
+function azmWeight(hr){
+  if(!(hr>0)) return 0;
+  const f=hr/HR_MAX();
+  return f<0.5 ? 0 : (f<0.70 ? 1 : 2);
+}
+
+/* Does this device publish zone minutes at all?
+
+   It has to be asked over a WINDOW, not per day, because ghPull's put() only
+   stores a field when the value is greater than zero — so a genuine rest day
+   and a watch that has never reported AZM in its life are byte-for-byte
+   identical in storage. Without this, the fallback fires on rest days and
+   invents an hour of cardio out of "you walked about", which is a worse lie
+   than the empty graph it replaced.
+
+   One AZM reading anywhere in two months proves the stream works, at which
+   point an absent value means a real zero and must be left alone. */
+function azmAvailable(){
+  for(let i=0;i<60;i++) if(+(HEALTHLOG[addDays(todayKey(),-i)]||{}).azm>0) return true;
+  return false;
+}
+
+function cardioLoad(k){
+  const r=HEALTHLOG[k]||{};
+  if(+r.azm>0) return {v:+r.azm,src:'azm'};
+  if(azmAvailable()) return {v:0,src:'azm'};   // a real rest day, not a missing stream
+  /* Detected workouts carry their own duration and average heart rate, which is
+     enough to rebuild zone minutes per session. Closest thing to the real
+     figure, because it is scored the same way over the same intervals. */
+  const acts=Array.isArray(r.acts)?r.acts:[];
+  let v=0;
+  acts.forEach(a=>{
+    if(+a.azm>0){ v+=+a.azm; return; }
+    const mins=(+a.sec||0)/60;
+    if(mins>0) v+=mins*azmWeight(+a.hr||0);
+  });
+  if(v>0) return {v:Math.round(v),src:'acts'};
+  /* Last rung, and the shakiest: whole-day active minutes weighted by the day's
+     average heart rate. Bounded at 600 because this same field also receives
+     active ENERGY from the Apple Health shortcut — the unit collision is noted
+     at HEALTH_EXTRA — and a four-figure kcal value must not be allowed to draw
+     a bar a thousand units tall. */
+  const act=Math.min(600,+r.active||0);
+  if(act>0) return {v:Math.round(act*(azmWeight(+r.hrAvg||0)||1)),src:'active'};
+  return {v:0,src:''};
+}
+const CARDIO_SRC_NOTE={
+  azm:'', // the real thing — nothing to explain
+  acts:'Estimated from your detected workouts — this watch isn’t sending zone minutes.',
+  active:'Rough estimate from daily active minutes — no zone or workout data for this period.',
+};
+
+/* Radial rather than another row of bars. Cardio load is a periodic quantity —
+   the question is "which days carried the week", and a ring answers that at a
+   glance where a left-to-right bar chart makes you read it like a sentence. The
+   dashed circle is the per-day share of the target, so bars crossing it are
+   the days that paid for the week. */
+function cardioRadialHTML(loads,goal){
+  const N=loads.length; if(!N) return '';
+  const W=232, C=W/2, RI=48, RO=104;
+  const per=goal/N;
+  /* Scaled so the target ring never sits on the rim: a week where every day
+     beat the target should still show headroom above the dashes. */
+  const mx=Math.max(per*1.55,...loads.map(l=>l.v))||1;
+  const rOf=v=>RI+(RO-RI)*Math.min(1,v/mx);
+  const sw=N<=7?15:(N<=16?9:5);
+  const spokes=loads.map((l,i)=>{
+    /* -90 puts day one at twelve o'clock; +half a step centres each spoke in
+       its own slice rather than straddling the boundary. */
+    const a=(-90+(i+0.5)*360/N)*Math.PI/180;
+    const co=Math.cos(a), si=Math.sin(a);
+    /* A zero day gets a stub the width of the spoke, not a zero-length line.
+       With round caps a zero-length line still paints a full dot, so empty days
+       came out as a ring of debris orbiting the total — the same mistake the bar
+       chart avoids with its 2px `.zero` track. */
+    const r=l.v?rOf(l.v):RI+sw*0.5;
+    const x1=C+RI*co, y1=C+RI*si, x2=C+r*co, y2=C+r*si;
+    const on=l.k===healthDay(), hit=l.v>=per;
+    return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"
+      stroke="${l.v?(hit?'var(--water-2)':'var(--water-1)'):'var(--fill-track)'}"
+      stroke-width="${sw}" stroke-linecap="round" opacity="${l.v?(on?1:.82):.45}"
+      pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"
+      style="animation:gh-spoke .5s var(--ease) ${(0.04*i).toFixed(2)}s forwards">
+      <title>${esc(fmtDateKey(l.k))}: ${l.v} zone minutes</title></line>`;
+  }).join('');
+  const done=loads.reduce((s,l)=>s+l.v,0);
+  return `<div class="gh-radial"><svg viewBox="0 0 ${W} ${W}" width="100%" height="100%" style="display:block">
+      <circle cx="${C}" cy="${C}" r="${RI-6}" fill="none" stroke="var(--fill-track)" stroke-width="1"/>
+      ${spokes}
+      <circle cx="${C}" cy="${C}" r="${rOf(per).toFixed(1)}" fill="none"
+        stroke="var(--stroke-2)" stroke-width="1" stroke-dasharray="2 5"/>
+      <text x="${C}" y="${C-2}" text-anchor="middle" class="gh-rnum">${done}</text>
+      <text x="${C}" y="${C+15}" text-anchor="middle" class="gh-rlab">zone min</text>
+    </svg></div>`;
 }
 
 function cardioCardHTML(){
   const wk=HEALTH_CARDIO==='week';
   const keys=periodKeys(wk?'week':'month',0);
-  const azm=keys.reduce((s,k)=>s+(+(HEALTHLOG[k]||{}).azm||0),0);
+  const loads=keys.map(k=>Object.assign({k},cardioLoad(k)));
+  const total=loads.reduce((s,l)=>s+l.v,0);
   const kcal=keys.reduce((s,k)=>s+(+(HEALTHLOG[k]||{}).kcalOut||0),0);
   const act=keys.reduce((s,k)=>s+(+(HEALTHLOG[k]||{}).active||0),0);
   const vo2=lastWith('vo2',todayKey(),30);
   const goal=wk?160:680;
-  const pct=Math.min(100,Math.round(azm/goal*100));
-  const mx=Math.max(1,...keys.map(x=>+(HEALTHLOG[x]||{}).azm||0));
-  /* A flat meter rather than a ring: the ring was decoration around a number,
-     and the per-day bars underneath already carry the shape of the week. */
-  const bars=keys.map(k=>{
-    const v=+(HEALTHLOG[k]||{}).azm||0, lab=dateOf(k).toLocaleDateString(undefined,{weekday:'narrow'});
-    return `<div class="gh-bcol"><div class="gh-b${v?'':' zero'}"
-      style="${v?'height:'+Math.max(5,v/mx*100)+'%':''}" title="${esc(fmtDateKey(k))}: ${v||0} zone minutes"></div>
-      ${wk?`<span class="gh-blab">${esc(lab)}</span>`:''}</div>`;
-  }).join('');
+  const pct=Math.min(100,Math.round(total/goal*100));
+  /* Worst rung actually used decides the caption — one derived day in a week of
+     real AZM still means the total is part estimate. */
+  const used=loads.filter(l=>l.v>0).map(l=>l.src);
+  const note=used.includes('active')?CARDIO_SRC_NOTE.active
+            :used.includes('acts')  ?CARDIO_SRC_NOTE.acts:'';
   return card('Cardio','',`
     <div class="gh-seg">${[['week','Week'],['month','Month']].map(([v,l])=>
       `<button data-hcard="${v}" class="${HEALTH_CARDIO===v?'on':''}">${l}</button>`).join('')}</div>
-    <div class="gh-meterrow"><span class="gh-mnum">${azm}</span><span class="gh-mof">of ${goal} zone minutes</span></div>
+    <div class="gh-meterrow"><span class="gh-mnum">${total}</span><span class="gh-mof">of ${goal} zone minutes</span></div>
     <div class="gh-meter"><span data-fill="${pct}" style="width:0"></span></div>
-    <div class="gh-chart">${bars}</div>
+    ${total?cardioRadialHTML(loads,goal)
+           :`<div class="gh-empty" style="padding:26px 6px">No cardio recorded ${wk?'this week':'this month'}.</div>`}
+    ${note?`<p class="gh-srcnote">${esc(note)}</p>`:''}
     <div class="gh-figs gh-figs-3">
       <div><span class="gh-fv">${act||'-'}</span><span class="gh-fl">active min</span></div>
       <div><span class="gh-fv">${kcal?Math.round(kcal).toLocaleString():'-'}</span><span class="gh-fl">kcal out</span></div>
       <div><span class="gh-fv">${vo2?vo2.v.toFixed(1):'-'}</span><span class="gh-fl">VO₂ max</span></div>
     </div>`);
+}
+
+/* ============ TRENDS ============
+   Every card above this one answers "how was today". These answer "which way is
+   it going", which is a different question and was not being asked anywhere:
+   Nutri-Score existed only per product, cardio load only per session.
+
+   All three live in one card behind a segmented control rather than as three
+   more cards, because they are read together — you come here with a question
+   about the direction of things, not about one metric. */
+let HEALTH_TREND='load';   // load | recovery | food
+
+function pearson(xs,ys){
+  const n=xs.length; if(n<4) return null;
+  const mx=xs.reduce((a,b)=>a+b,0)/n, my=ys.reduce((a,b)=>a+b,0)/n;
+  let sxy=0,sxx=0,syy=0;
+  for(let i=0;i<n;i++){ const dx=xs[i]-mx, dy=ys[i]-my; sxy+=dx*dy; sxx+=dx*dx; syy+=dy*dy; }
+  /* A flat series has no variance and therefore no correlation to report —
+     dividing by it yields NaN, which would print as "NaN% correlated". */
+  if(!(sxx>1e-9&&syy>1e-9)) return null;
+  return sxy/Math.sqrt(sxx*syy);
+}
+
+const NUTRI_NUM={a:1,b:2,c:3,d:4,e:5};
+/* The day's average Nutri-Score across everything logged that has one. Recipes
+   and free-form entries have no grade and are skipped rather than counted as
+   neutral — averaging in a value nobody assigned would drag every day toward C. */
+function dayNutri(key){
+  const day=PLAN[key]; if(!day) return null;
+  let sum=0,n=0;
+  ['breakfast','lunch','dinner','snack'].forEach(slot=>{
+    (day[slot]||[]).forEach(ref=>{
+      if(!ref||ref.type!=='product') return;
+      const p=prodById(ref.id); if(!p) return;
+      const g=NUTRI_NUM[String(p.nutriscore||'').toLowerCase()];
+      if(g){ sum+=g; n++; }
+    });
+  });
+  return n?{avg:sum/n,n}:null;
+}
+
+/* Simple sparkline-ish column chart shared by the load and food trends. */
+function trendBars(rows,opt){
+  const mx=Math.max(opt.min||1,...rows.map(r=>r.v));
+  return `<div class="gh-chart" style="height:${opt.h||88}px">${rows.map(r=>{
+    const pc=r.v>0?Math.max(4,r.v/mx*100):0;
+    return `<div class="gh-bcol">
+      <div class="gh-b${r.v?'':' zero'}" style="${r.v?`height:${pc.toFixed(1)}%;background:${r.c||'linear-gradient(180deg,var(--water-1),var(--water-2))'}`:''}"
+        title="${esc(r.t||'')}"></div>
+      <span class="gh-blab${r.now?' now':''}">${esc(r.lab)}</span></div>`;
+  }).join('')}</div>`;
+}
+
+function trendLoadHTML(){
+  const N=8, weeks=[];
+  for(let i=N-1;i>=0;i--){
+    const keys=periodKeys('week',-i);
+    const v=keys.reduce((s,k)=>s+cardioLoad(k).v,0);
+    weeks.push({i,v,keys});
+  }
+  const goal=160;
+  const rows=weeks.map((w,idx)=>({
+    v:w.v, now:idx===N-1,
+    lab:idx===N-1?'now':('-'+(N-1-idx)),
+    t:fmtDateKey(w.keys[0])+' — '+w.v+' zone minutes',
+    /* A week that missed the target is dimmer, NOT the track colour — painting
+       it var(--fill-track) made a 140-minute week look exactly like a week with
+       no training in it at all, which is the opposite of what the chart is for.
+       Saturation carries "did you clear it"; height still carries how much. */
+    c:w.v>=goal?'linear-gradient(180deg,var(--water-1),var(--water-2))'
+               :'linear-gradient(180deg,rgba(90,200,250,.34),rgba(10,132,255,.34))',
+  }));
+  const recent=weeks.slice(-4).reduce((s,w)=>s+w.v,0)/4;
+  const prior =weeks.slice(0,4).reduce((s,w)=>s+w.v,0)/4;
+  const delta=prior>0?Math.round((recent-prior)/prior*100):null;
+  const hit=weeks.filter(w=>w.v>=goal).length;
+  return `${trendBars(rows,{min:goal})}
+    <div class="gh-figs gh-figs-3" style="margin-top:14px">
+      <div><span class="gh-fv">${Math.round(recent)}</span><span class="gh-fl">4-wk average</span></div>
+      <div><span class="gh-fv">${delta==null?'-':(delta>0?'+':'')+delta+'%'}</span><span class="gh-fl">vs previous 4</span></div>
+      <div><span class="gh-fv">${hit}<span class="gh-fu">/${N}</span></span><span class="gh-fl">weeks on target</span></div>
+    </div>
+    <p class="gh-srcnote">Weekly zone minutes. Solid bars cleared the ${goal}-minute target.</p>`;
+}
+
+/* ---- load vs recovery ----
+   The pairing is the whole idea: today's cardio load against the restlessness of
+   the night that FOLLOWS it. Plotting both against the same date would compare a
+   Tuesday workout with the sleep that preceded it, which is a graph of nothing.
+   That off-by-one night is the difference between a correlation view and two
+   lines sharing an axis. */
+function trendRecoveryHTML(){
+  const DAYS=21, pairs=[];
+  for(let i=DAYS;i>=1;i--){
+    const k=addDays(todayKey(),-i);
+    const load=cardioLoad(k).v;
+    const night=sleepRestless(HEALTHLOG[addDays(k,1)]||{});
+    pairs.push({k,load,rest:night?night.score:null});
+  }
+  const usable=pairs.filter(p=>p.rest!=null);
+  if(usable.length<4){
+    return `<div class="gh-empty" style="padding:26px 6px">Not enough nights with stage data yet. This needs about a week of both cardio and sleep before it can say anything.</div>`;
+  }
+  const r=pearson(usable.map(p=>p.load),usable.map(p=>p.rest));
+  const W=320,H=110,PAD=6;
+  const mxL=Math.max(1,...pairs.map(p=>p.load));
+  const n=pairs.length, bw=W/n;
+  const bars=pairs.map((p,i)=>{
+    const h=p.load>0?Math.max(2,(p.load/mxL)*(H-PAD*2)):0;
+    return h?`<rect x="${(i*bw+bw*0.22).toFixed(1)}" y="${(H-h).toFixed(1)}"
+      width="${(bw*0.56).toFixed(1)}" height="${h.toFixed(1)}" rx="1.5"
+      fill="var(--water-2)" opacity=".55"><title>${esc(fmtDateKey(p.k))}: ${p.load} zone min</title></rect>`:'';
+  }).join('');
+  /* The line only connects nights that actually have data — a gap is drawn as a
+     gap, not bridged, so a missing night can't imply a trend through it. */
+  let segs=[],cur=[];
+  pairs.forEach((p,i)=>{
+    if(p.rest==null){ if(cur.length>1) segs.push(cur); cur=[]; return; }
+    cur.push((i*bw+bw/2).toFixed(1)+','+(PAD+(1-p.rest/100)*(H-PAD*2)).toFixed(1));
+  });
+  if(cur.length>1) segs.push(cur);
+  const line=segs.map(s=>`<polyline points="${s.join(' ')}" fill="none" stroke="var(--orange)"
+    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`).join('');
+  const dots=pairs.map((p,i)=>p.rest==null?'':
+    `<circle cx="${(i*bw+bw/2).toFixed(1)}" cy="${(PAD+(1-p.rest/100)*(H-PAD*2)).toFixed(1)}" r="2.4"
+      fill="var(--orange)"><title>${esc(fmtDateKey(addDays(p.k,1)))} night: restlessness ${p.rest}</title></circle>`).join('');
+
+  const rr=r==null?null:Math.abs(r);
+  const verdict = r==null ? 'Not enough variation in these three weeks to read a relationship.'
+    : rr<0.25 ? 'No real link right now — how hard you train isn’t moving how well you sleep.'
+    : r>0 ? `Harder days are followed by more broken nights (r&nbsp;=&nbsp;${r.toFixed(2)}). Worth watching whether the load is landing too late in the day.`
+    : `Harder days are followed by more settled nights (r&nbsp;=&nbsp;${r.toFixed(2)}). Training is helping you sleep.`;
+  return `<div class="gh-legend">
+      <span><i class="lg-bar"></i>Cardio load</span><span><i class="lg-line"></i>Restlessness, the night after</span></div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="gh-corr">${bars}${line}${dots}</svg>
+    <div class="gh-axis"><span>${esc(fmtDateKey(pairs[0].k))}</span><span>last night</span></div>
+    <p class="gh-verdict">${verdict}</p>`;
+}
+
+function trendFoodHTML(){
+  const N=8, weeks=[];
+  for(let i=N-1;i>=0;i--){
+    const keys=periodKeys('week',-i);
+    let sum=0,n=0;
+    keys.forEach(k=>{ const d=dayNutri(k); if(d){ sum+=d.avg*d.n; n+=d.n; } });
+    weeks.push({avg:n?sum/n:null,n,k0:keys[0]});
+  }
+  const have=weeks.filter(w=>w.avg!=null);
+  if(!have.length){
+    return `<div class="gh-empty" style="padding:26px 6px">No graded products logged yet. Scan a barcode and the Nutri-Score comes with it — this fills in from there.</div>`;
+  }
+  const W=320,H=120,PAD=8,GUT=15;
+  const bw=(W-GUT)/N;
+  const yOf=v=>PAD+((v-1)/4)*(H-PAD*2);        // 1 (=A) at the top, 5 (=E) at the bottom
+  /* Colour bands behind the line, so a point's height and its colour say the
+     same thing. The letters label the bands from a gutter INSIDE the svg — as a
+     row of divs underneath they would have read as an x axis, and the grade
+     scale runs down the y. */
+  const bandH=(H-PAD*2)/5;
+  const bands=['a','b','c','d','e'].map((g,i)=>{
+    const y=PAD+i*bandH;
+    return `<rect x="${GUT}" y="${y.toFixed(1)}" width="${W-GUT}" height="${bandH.toFixed(1)}"
+      fill="${NUTRI_COLORS[g]}" opacity=".13"/>`+
+      `<text x="0" y="${(y+bandH/2+3.4).toFixed(1)}" class="ns-ax">${g.toUpperCase()}</text>`;
+  }).join('');
+  let cur=[],segs=[];
+  weeks.forEach((w,i)=>{
+    if(w.avg==null){ if(cur.length>1) segs.push(cur); cur=[]; return; }
+    cur.push((GUT+i*bw+bw/2).toFixed(1)+','+yOf(w.avg).toFixed(1));
+  });
+  if(cur.length>1) segs.push(cur);
+  const line=segs.map(s=>`<polyline points="${s.join(' ')}" fill="none" stroke="var(--txt)"
+    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`).join('');
+  const dots=weeks.map((w,i)=>w.avg==null?'':
+    `<circle cx="${(GUT+i*bw+bw/2).toFixed(1)}" cy="${yOf(w.avg).toFixed(1)}" r="3.4"
+      fill="var(--bg-1)" stroke="var(--txt)" stroke-width="2">
+      <title>${esc(fmtDateKey(w.k0))}: average ${['','A','B','C','D','E'][Math.round(w.avg)]} over ${w.n} item${w.n===1?'':'s'}</title></circle>`).join('');
+  const latest=have[have.length-1], letter=['','A','B','C','D','E'][Math.round(latest.avg)];
+  const first=have[0];
+  const dir=have.length<2?null:(latest.avg<first.avg?'better':latest.avg>first.avg?'worse':'flat');
+  return `<svg viewBox="0 0 ${W} ${H}" class="gh-corr">${bands}${line}${dots}</svg>
+    <div class="gh-figs gh-figs-3" style="margin-top:14px">
+      <div><span class="gh-fv" style="color:${NUTRI_COLORS[letter.toLowerCase()]}">${letter}</span><span class="gh-fl">this week</span></div>
+      <div><span class="gh-fv">${latest.n}</span><span class="gh-fl">graded items</span></div>
+      <div><span class="gh-fv">${dir==='better'?'↑':dir==='worse'?'↓':'–'}</span><span class="gh-fl">${dir==='better'?'improving':dir==='worse'?'slipping':'steady'}</span></div>
+    </div>
+    <p class="gh-srcnote">Weekly average across every logged product carrying a Nutri-Score. Recipes and hand-entered food aren’t graded, so they don’t count either way.</p>`;
+}
+
+function trendsCardHTML(){
+  const views=[['load','Cardio'],['recovery','Load vs sleep'],['food','Nutri-Score']];
+  const body=HEALTH_TREND==='recovery'?trendRecoveryHTML()
+            :HEALTH_TREND==='food'    ?trendFoodHTML()
+            :trendLoadHTML();
+  return card('Trends','',`
+    <div class="gh-seg">${views.map(([v,l])=>
+      `<button data-htrend="${v}" class="${HEALTH_TREND===v?'on':''}">${l}</button>`).join('')}</div>
+    ${body}`);
 }
 
 const ACT_ART={RUNNING:['run','var(--green)'],WALKING:['walk','var(--teal)'],BIKING:['bike','var(--blue)'],
@@ -4797,7 +6006,27 @@ If you cannot tell what the food is, set name to "Unknown", confidence "low", an
 
 Be realistic rather than cautious: a plausible estimate is more useful than a refusal. Do not round to suspiciously neat numbers.`;
 
-async function aiAnalyse(b64){
+/* The typed-description path. Same schema, same result screen, different sense:
+   there is no label to read, so "high" confidence is never available and saying
+   so up front stops the model claiming it. Weights and brands in the text are
+   the only hard facts on offer, so they get named explicitly as the things to
+   key off. */
+const AI_TEXT_PROMPT=`Work out the nutrition for the food described below.
+
+Identify the dish. If the description gives amounts, brands or weights, use them exactly and reflect them in the portion weight. If it doesn't, assume one ordinary serving as an adult would plate it, and say what you assumed in "note".
+Give the combined total for everything described, with basis "per_portion".
+Confidence is "medium" when the description is specific about what and how much, "low" when it is vague. Never "high" — nothing here is read off a label.
+If the text does not describe food at all, set name to "Unknown", confidence "low", and every number to 0.
+
+Be realistic rather than cautious: a plausible estimate is more useful than a refusal. Do not round to suspiciously neat numbers.
+
+The description:
+`;
+
+/* One request path for both entries. It takes content blocks rather than a
+   photo, so the text route is the same function with a different first block —
+   no second copy of the error mapping, the refusal check, or the JSON parse. */
+async function aiAnalyse(content){
   const cfg=aiCfg();
   const r=await fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
@@ -4811,10 +6040,7 @@ async function aiAnalyse(b64){
       model:cfg.model||AI_MODEL_DEFAULT,
       max_tokens:1024,
       output_config:{format:{type:'json_schema',schema:AI_SCHEMA}},
-      messages:[{role:'user',content:[
-        {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
-        {type:'text',text:AI_PROMPT}
-      ]}]
+      messages:[{role:'user',content}]
     })
   });
   if(!r.ok){
@@ -4868,38 +6094,130 @@ function openSnapSetup(target){
 /* Rendered inside the meal picker's Snap tab rather than as its own sheet, so
    the category bar stays put and switching tabs behaves like the others. */
 function snapPaneHTML(){
+  /* "Enter it by hand" is offered in BOTH states, and that is deliberate. Taking
+     the Mum's-cooking tab out of the picker removed the only route to a plain
+     macro form; if it only came back once you had an API key, removing the tab
+     would have quietly deleted a feature for anyone who never sets one up. */
+  const byHand=`<button class="cta ghost" id="snapManual">Enter the macros by hand</button>`;
   if(!aiReady()){
-    return `<div class="scan-err" style="padding:26px 6px">Snap needs an Anthropic API key before it can read photos.<br><br>
-      Costs a fraction of a cent to a few cents per photo depending on the model you pick, and the key stays on this phone.</div>
-      <button class="cta red" id="snapSetup">Set up Snap</button>`;
+    return `<div class="scan-err" style="padding:22px 6px 6px">Snap reads food from a photo, or from a sentence describing it, and fills in the macros.<br><br>
+      It needs an Anthropic API key — a fraction of a cent to a few cents a time depending on the model, and the key stays on this phone.</div>
+      <button class="cta red" id="snapSetup">Set up Snap</button>
+      ${byHand}`;
   }
   return `<div style="margin-top:14px">
-      <label class="cta red" for="snapCam" style="text-align:center;cursor:pointer;display:block">Take a photo</label>
+      <label class="cta red" for="snapCam" style="text-align:center;cursor:pointer;display:block"><span class="ic-in">${GH_ICON.camera}</span>Take a photo</label>
       <input type="file" id="snapCam" accept="image/*" capture="environment" style="display:none">
       <label class="cta ghost" for="snapLib" style="text-align:center;cursor:pointer;display:block">Choose from library</label>
       <input type="file" id="snapLib" accept="image/*" style="display:none">
+      <button class="cta ghost" id="snapSay"><span class="ic-in">${GH_ICON.ai}</span>Describe it in words</button>
       <p style="font-size:11px;color:var(--txt-3);margin:10px 2px 0;line-height:1.55">
-        Point at the nutrition label for exact numbers, or at the plate for an estimate. Always check before saving.</p>
-      <button class="cta ghost" id="snapSettings" style="margin-top:14px">Snap settings</button>
+        Point at the nutrition label for exact numbers, or at the plate for an estimate. Describing works when there is nothing to photograph — a meal out, or something already eaten. Always check before saving.</p>
+      ${byHand}
+      <button class="cta ghost" id="snapSettings">Snap settings</button>
     </div>`;
 }
 
-async function snapHandleFile(file,target){
-  if(!file) return;
-  openSheet(`<h3>Reading the photo…</h3><div class="scan-err" id="snapWait">Sending to Claude — this takes a few seconds.</div>`);
+/* Both entries land here: one waiting screen, one error screen, one result
+   screen. `what` only changes the wording, so the two routes cannot drift. */
+async function snapRun(content,target,what){
+  openSheet(`<h3>Reading the ${what}…</h3>
+    <div class="scan-err" id="snapWait">Sending to Claude — this takes a few seconds.</div>`);
   let d;
-  try{
-    const {b64}=await aiDownscale(file);
-    d=await aiAnalyse(b64);
-  }catch(e){
+  try{ d=await aiAnalyse(content); }
+  catch(e){
     openSheet(`<h3>Snap failed</h3><div class="scan-err">${esc(e.message)}</div>
+      <button class="cta ghost" id="snRetry"><span class="ic-in">${GH_ICON.retry}</span>Try again</button>
       <button class="cta ghost" id="snEdit">Snap settings</button>
       <button class="cta ghost" id="snCancel">Cancel</button>`);
+    /* Straight back to the Snap pane, not back to a dead sheet — rate limits and
+       dropped connections are the common failures here and both clear on a
+       second attempt. */
+    document.getElementById('snRetry').onclick=()=>openItemPicker(target.dayKey,target.slot,'snap');
     document.getElementById('snEdit').onclick=()=>openSnapSetup(target);
     document.getElementById('snCancel').onclick=closeSheet;
     return;
   }
   showSnapResult(d,target);
+}
+
+async function snapHandleFile(file,target){
+  if(!file) return;
+  openSheet(`<h3>Reading the photo…</h3>
+    <div class="scan-err" id="snapWait">Downscaling, then sending to Claude.</div>`);
+  let b64;
+  /* Downscaling is canvas work on a ~12MP file and can fail on its own — an
+     unreadable HEIC, a file the picker handed back empty. Kept out of snapRun so
+     that failure doesn't get reported as a model error. */
+  try{ ({b64}=await aiDownscale(file)); }
+  catch(e){
+    openSheet(`<h3>Couldn't read that image</h3>
+      <div class="scan-err">${esc(e.message||'The file could not be opened.')}</div>
+      <button class="cta ghost" id="snRetry"><span class="ic-in">${GH_ICON.retry}</span>Try again</button>
+      <button class="cta ghost" id="snCancel">Cancel</button>`);
+    document.getElementById('snRetry').onclick=()=>openItemPicker(target.dayKey,target.slot,'snap');
+    document.getElementById('snCancel').onclick=closeSheet;
+    return;
+  }
+  await snapRun([{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
+                 {type:'text',text:AI_PROMPT}],target,'photo');
+}
+
+/* ---- describe it in words ----
+   The sibling of the photo path, for food there is nothing to point a camera at:
+   a meal already eaten, a restaurant dish, a recipe read off someone else's
+   phone. Same model, same schema, same result screen. */
+function snapDescribe(target){
+  const slotLabel=target.slot==='snack'?'Snacks':cap(target.slot);
+  openSheet(`<h3>Describe it</h3>
+    <div class="meta">What you ate, in your own words. Amounts and brands make it much more accurate.</div>
+    <div class="field" style="margin-top:14px">
+      <textarea id="snSay" rows="4" placeholder="e.g. two fried eggs, a slice of rye toast with butter, and a flat white"></textarea></div>
+    <p style="font-size:11px;color:var(--txt-3);margin:2px 2px 0;line-height:1.55">
+      An estimate, not a measurement — there is no label being read here. Check the numbers on the next screen.</p>
+    <button class="cta red" id="snSayGo">Work out the macros</button>
+    <button class="cta ghost" id="snSayBack">Back to Snap</button>`);
+  const go=()=>{
+    const t=(document.getElementById('snSay').value||'').trim();
+    if(t.length<3){ toast('Describe what you ate first'); return; }
+    /* Hard cap before it is sent, not after: a pasted wall of text is the one
+       way this call gets expensive, and nothing past a few sentences helps. */
+    snapRun([{type:'text',text:AI_TEXT_PROMPT+t.slice(0,600)}],target,'description');
+  };
+  document.getElementById('snSayGo').onclick=go;
+  document.getElementById('snSayBack').onclick=()=>openItemPicker(target.dayKey,target.slot,'snap');
+  /* ⌘/Ctrl+Enter submits; plain Enter must stay a newline in a textarea. */
+  document.getElementById('snSay').addEventListener('keydown',e=>{
+    if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)) go();
+  });
+  setTimeout(()=>{const i=document.getElementById('snSay'); if(i)i.focus();},250);
+  void slotLabel;
+}
+
+/* ---- by hand ----
+   What the "Mum's cooking" tab used to be, moved inside Snap and kept reachable
+   with no API key at all. Same 'mum' ref, same fields. */
+function snapManual(target){
+  const slotLabel=target.slot==='snack'?'Snacks':cap(target.slot);
+  openSheet(`<h3>Enter it by hand</h3>
+    <div class="meta">For home cooking and anything you already know the numbers for.</div>
+    <div class="field" style="margin-top:14px"><label>What was it</label><input id="mmName" placeholder="e.g. Mum's borscht"></div>
+    <div class="field2"><div class="field" style="margin-top:0"><label>Kcal</label><input id="mmKcal" type="number" inputmode="numeric" placeholder="e.g. 550"></div><div class="field" style="margin-top:0"><label>Protein g</label><input id="mmProtein" type="number" inputmode="decimal" placeholder="e.g. 30"></div></div>
+    <div class="field2"><div class="field" style="margin-top:0"><label>Carbs g</label><input id="mmCarbs" type="number" inputmode="decimal" placeholder="e.g. 60"></div><div class="field" style="margin-top:0"><label>Fat g</label><input id="mmFat" type="number" inputmode="decimal" placeholder="e.g. 18"></div></div>
+    <button class="cta red" id="mmAdd">Add to ${slotLabel}</button>
+    <button class="cta ghost" id="mmBack">Back to Snap</button>`);
+  document.getElementById('mmAdd').onclick=()=>{
+    const day=ensureDay(target.dayKey);
+    day[target.slot].push({type:'mum',
+      name:document.getElementById('mmName').value.trim()||"Mum's cooking",
+      kcal:+document.getElementById('mmKcal').value||0,
+      protein:+document.getElementById('mmProtein').value||0,
+      carbs:+document.getElementById('mmCarbs').value||0,
+      fat:+document.getElementById('mmFat').value||0});
+    savePlan(); closeSheet(); renderSumCard(); renderDaystrip(); renderDayDetail();
+    toast('Added to '+slotLabel);
+  };
+  document.getElementById('mmBack').onclick=()=>openItemPicker(target.dayKey,target.slot,'snap');
 }
 
 function showSnapResult(d,target){
@@ -5024,7 +6342,30 @@ function offToProduct(o,code){
 }
 
 let SCAN_STREAM=null, SCAN_RAF=null, SCAN_BUSY=false;
+/* Generation counter for the decode loop. THIS is what made scanning die until
+   the app was restarted, and it is worth spelling out because nothing about it
+   is visible from the happy path:
+
+   tick() is async and every piece of its state (SCAN_RAF, SCAN_BUSY) is global,
+   shared by whichever run is current. Stop the scanner while a scanImageData()
+   is still in flight — tapping Cancel, or a successful decode — and that await
+   resolves into a dead run, which cheerfully schedules one more timer. That
+   orphan is harmless on its own: it finds SCAN_STREAM null and stops.
+
+   It is NOT harmless if the scanner has been reopened in the meantime. The
+   orphan then sees the NEW stream, takes SCAN_BUSY, decodes frames from the old
+   and now-black <video>, and — the part that actually breaks things — overwrites
+   SCAN_RAF with its own handle. Two loops are now running, stopScanner() can
+   only ever cancel one of them, and the surviving one is the one pointed at a
+   video that will never produce another frame. The reticle sits there looking
+   live and decodes nothing, forever.
+
+   A run token fixes it at the source: a tick that is not the current generation
+   returns without touching a single global. Checked twice — on entry and again
+   after the await, because the whole problem is what changes across that await. */
+let SCAN_RUN=0;
 function stopScanner(){
+  SCAN_RUN++;                       // invalidate any decode still in flight
   if(SCAN_RAF){ clearTimeout(SCAN_RAF); SCAN_RAF=null; }
   /* Releasing the tracks is not optional — leave them and iOS keeps the camera
      indicator lit after the sheet closes, which reads as the app spying. */
@@ -5049,13 +6390,29 @@ function openBarcodeScanner(target){
   startScanner();
 }
 
+/* Every failure below is recoverable by trying again — a denied permission gets
+   granted, a camera held by another app gets released, a decoder that lost its
+   race with the service worker is there on the second look. Before this, all of
+   them were dead ends: the only ways out were "by hand" and "Cancel", and Cancel
+   meant walking the whole path back from the meal slot. */
+function scanRetryHTML(){
+  return `<button class="cta ghost scan-retry" id="scanRetry"><span class="ic-in">${GH_ICON.retry}</span>Try again</button>`;
+}
+function wireScanRetry(){
+  const b=document.getElementById('scanRetry');
+  if(b) b.onclick=()=>{ stopScanner(); startScanner(); };
+}
 async function startScanner(){
   const body=document.getElementById('scanBody'); if(!body) return;
+  /* Claim this run before anything async happens. stopScanner() bumps the same
+     counter, so any earlier loop is already invalid by the time we get here. */
+  const run=++SCAN_RUN;
+  const fail=html=>{ body.innerHTML=`<div class="scan-err">${html}</div>`+scanRetryHTML(); wireScanRetry(); };
   if(typeof zbarWasm==='undefined'){
-    body.innerHTML=`<div class="scan-err">Barcode decoder didn't load. If you just updated, close and reopen the app.</div>`; return;
+    fail(`Barcode decoder didn't load. If you just updated, close and reopen the app.`); return;
   }
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
-    body.innerHTML=`<div class="scan-err">This browser can't open the camera. Use “Enter barcode by hand” below.</div>`; return;
+    fail(`This browser can't open the camera. Use &ldquo;Enter barcode by hand&rdquo; below.`); return;
   }
   body.innerHTML=`<div class="scan-stage">
       <video id="scanVid" playsinline autoplay muted></video>
@@ -5069,12 +6426,20 @@ async function startScanner(){
     SCAN_STREAM=await navigator.mediaDevices.getUserMedia({
       video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:960}},audio:false});
   }catch(e){
+    if(run!==SCAN_RUN) return;
     const denied=/NotAllowed|Permission/i.test(e.name+e.message);
-    body.innerHTML=`<div class="scan-err">${denied
+    const busy=/NotReadable|TrackStart|AbortError/i.test(e.name+e.message);
+    fail(denied
       ? 'Camera access was denied. Allow it in Settings → Safari → Camera, then try again.'
-      : 'Could not start the camera: '+esc(e.message)}</div>`;
+      : busy
+      ? 'Something else is using the camera. Close it, then try again.'
+      : 'Could not start the camera: '+esc(e.message));
     return;
   }
+  /* Reopened, or cancelled, while getUserMedia was resolving. The stream we are
+     holding belongs to a run nobody is watching, so hand the tracks back rather
+     than leaving the camera light on for a scanner that no longer exists. */
+  if(run!==SCAN_RUN){ SCAN_STREAM.getTracks().forEach(t=>t.stop()); SCAN_STREAM=null; return; }
   vid.srcObject=SCAN_STREAM;
   /* playsinline is set on the element too — without it iOS takes the video
      fullscreen and the sheet's controls disappear behind it. */
@@ -5093,6 +6458,7 @@ async function startScanner(){
 
   const cv=document.createElement('canvas'), ctx=cv.getContext('2d',{willReadFrequently:true});
   const tick=async()=>{
+    if(run!==SCAN_RUN) return;               // superseded: touch nothing, reschedule nothing
     if(!SCAN_STREAM||SCAN_BUSY) return;
     if(vid.readyState>=2&&vid.videoWidth){
       SCAN_BUSY=true;
@@ -5103,9 +6469,14 @@ async function startScanner(){
         cv.width=Math.round(vid.videoWidth*scale); cv.height=Math.round(vid.videoHeight*scale);
         ctx.drawImage(vid,0,0,cv.width,cv.height);
         const syms=await zbarWasm.scanImageData(ctx.getImageData(0,0,cv.width,cv.height));
+        /* The await is the dangerous gap — the run can be stopped and restarted
+           across it. Bail before writing SCAN_BUSY or SCAN_RAF, both of which
+           now belong to somebody else. */
+        if(run!==SCAN_RUN) return;
         const hit=(syms||[]).map(s=>s.decode&&s.decode()).find(v=>v&&/^\d{8,14}$/.test(v));
         if(hit){ stopScanner(); onBarcode(hit); return; }
       }catch(e){}
+      if(run!==SCAN_RUN) return;
       SCAN_BUSY=false;
     }
     SCAN_RAF=setTimeout(tick,150);   // ~6-7 fps is plenty and saves battery
@@ -5135,7 +6506,11 @@ async function onBarcode(code){
      The app has a dedupe tool precisely because duplicates accumulate. */
   const known=PRODUCTS.find(p=>p.barcode===code);
   if(known){
-    if(SCAN_TARGET){ const t=SCAN_TARGET; SCAN_TARGET=null; return openProductAmount(t.dayKey,t.slot,known.id); }
+    const t=SCAN_TARGET; SCAN_TARGET=null;
+    /* Already in the library and heading for the shopping list — the whole
+       point of #12: no lookup, no amount prompt, straight in at its default. */
+    if(t&&t.shop){ const how=await shopAddScanned(known); return shopScanAdded(known,how); }
+    if(t) return openProductAmount(t.dayKey,t.slot,known.id);
     closeSheet(); toast('Already in your products'); openProductEditor(known.id); return;
   }
 
@@ -5173,16 +6548,18 @@ function showScanHit(code,d){
     </div>
     <p style="font-size:11px;color:var(--txt-3);margin:10px 2px 0;line-height:1.5">
       Data from Open Food Facts. Check the numbers against the pack before saving — community data can be wrong or out of date. Price isn't included, so add yours on the next screen.</p>
-    <button class="cta red" id="shAdd">${SCAN_TARGET?`Add to ${SCAN_TARGET.slot==='snack'?'Snacks':cap(SCAN_TARGET.slot)}`:'Add to products'}</button>
+    <button class="cta red" id="shAdd">${SCAN_TARGET?(SCAN_TARGET.shop?'Add to shopping list':`Add to ${SCAN_TARGET.slot==='snack'?'Snacks':cap(SCAN_TARGET.slot)}`):'Add to products'}</button>
     ${SCAN_TARGET?'<button class="cta ghost" id="shEdit">Edit before adding</button>':''}
     <button class="cta ghost" id="shRescan">Scan another</button>
     <button class="cta ghost" id="shCancel">Cancel</button>`);
-  /* Scanning from a meal slot still saves the product to the library — the
-     point of scanning once is not having to scan it again next week. */
+  /* Scanning from a meal slot or the shopping list still saves the product to
+     the library — the point of scanning once is not having to scan it again
+     next week, and it is what makes the next scan skip all of this. */
   const commit=async(thenAmount)=>{
     const t=SCAN_TARGET; SCAN_TARGET=null;
     const np={...d,id:'p'+Date.now()+Math.random().toString(36).slice(2,5)};
     PRODUCTS.push(np); await saveProducts(); renderProdGrid();
+    if(t&&t.shop&&thenAmount){ const how=await shopAddScanned(np); return shopScanAdded(np,how); }
     if(t&&thenAmount) openProductAmount(t.dayKey,t.slot,np.id);
     else { closeSheet(); toast('Added to products'); }
   };
@@ -5407,6 +6784,7 @@ function renderShop(){
       <div class="st-sub"><span>Still to buy</span><span class="st-remain">€${remaining.toFixed(2)}</span></div>
     </div>
     <div class="shop-ctrls" style="display:flex;gap:8px;margin:10px 0 4px;flex-wrap:wrap">
+      <button class="rec-act" id="shopScan" style="flex:1;min-width:120px"><span class="ic-in">${GH_ICON.barcode}</span>Scan to add</button>
       <button class="rec-act" id="shopShare" style="flex:1;min-width:120px">⤴ Share / Notes</button>
       <button class="rec-act" id="shopClearChecked">Clear checked</button>
       <button class="rec-act" id="shopClearAll">Clear all</button>
@@ -5414,7 +6792,11 @@ function renderShop(){
   }
 
   if(!anything){
-    html+=`<div class="empty">Nothing yet. Assign recipes to days this week, drop a product into a meal, or add a custom product below.</div>`;
+    /* The empty state needs the scanner too — it is the state you are most
+       likely to be in while stood in a shop, and the controls row that carries
+       the button only renders once the list has something in it. */
+    html+=`<div class="empty">Nothing yet. Assign recipes to days this week, drop a product into a meal, scan a barcode, or add a custom product below.</div>
+      <button class="rec-act" id="shopScan" style="margin:10px 0 2px"><span class="ic-in">${GH_ICON.barcode}</span>Scan to add</button>`;
   } else {
     if(list.length){html+=`<div class="shop-cat">From your meal plan</div>`;
       list.forEach(it=>{
@@ -5490,6 +6872,8 @@ function renderShop(){
   box.querySelectorAll('[data-customedit]').forEach(el=>el.addEventListener('click',ev=>{if(ev.target.closest('.chk')||ev.target.closest('.rm'))return;openCustomProductEditor(el.dataset.customedit);}));
   const fp=document.getElementById('addFromProducts');
   if(fp) fp.onclick=openProductToShopPicker;
+  const scanBtn=document.getElementById('shopScan');
+  if(scanBtn) scanBtn.onclick=()=>openBarcodeScanner({shop:true});
   const shareBtn=document.getElementById('shopShare');
   if(shareBtn) shareBtn.onclick=()=>shareShoppingList(list,mealProds);
   const clrChk=document.getElementById('shopClearChecked');
@@ -5578,6 +6962,61 @@ function openBuyAmountEditor(key,it){
 }
 // #3a — pick an existing product and add it to the shopping list as a linked custom line
 let shopPickQuery='';
+/* ---- barcode → shopping list ----
+   Adds a known product straight to the list at its own default amount, with no
+   amount sheet in between. That is the point of scanning it: you are stood in
+   front of the shelf holding the thing, and you already told the app how much of
+   it you buy when you set defaultAmount. Anything unusual is still one tap away
+   in the line's own editor. */
+async function shopAddScanned(p){
+  const base=prodBase(p);
+  const amt=+p.defaultAmount>0 ? unitsToBase(p,+p.defaultAmount) : (base.unitSize||1);
+  const units=baseToUnits(p,amt);
+  const linePrice=+(units*(+p.price||0)).toFixed(2);
+  const existing=SHOP_CUSTOM.find(x=>x.productId===p.id);
+  /* Scanning the same pack twice means two of them, matching what the picker
+     does — not a duplicate line, and not a silent no-op. */
+  if(existing){
+    existing.amount=(+existing.amount||0)+amt;
+    existing.price=+((existing.price||0)+linePrice).toFixed(2);
+  } else {
+    SHOP_CUSTOM.push({id:'c'+Date.now()+Math.random().toString(36).slice(2,5),
+      productId:p.id,name:p.name,amount:amt,unit:base.baseUnit,price:linePrice,
+      unitPriceOverride:+p.price||0,kcal:Math.round(units*(p.kcal||0)),notes:'',checked:false});
+  }
+  await saveShopCustom();
+  renderShop();
+  toast(`${p.name} — ${numShort(amt)} ${base.baseUnit} added`);
+  return existing?'more':'new';
+}
+
+/* The sheet shown after a shopping scan: what went in, and the two things you
+   might plausibly want next. Deliberately not auto-closing — a scan that lands
+   silently is a scan you cannot trust happened. */
+function shopScanAdded(p,how){
+  const base=prodBase(p);
+  openSheet(`<h3>Added to shopping</h3>
+    <div class="scan-hit">
+      <div style="font-size:26px">🛒</div>
+      <div style="flex:1;min-width:0">
+        <div class="sh-nm">${esc(p.name)}</div>
+        <div class="sh-meta">${how==='more'?'Increased by':'Default amount:'} ${numShort(+p.defaultAmount>0?unitsToBase(p,+p.defaultAmount):(base.unitSize||1))} ${esc(base.baseUnit)}</div>
+        ${p.nutriscore?`<div class="sh-meta">Nutri-Score ${esc(String(p.nutriscore).toUpperCase())}</div>`:''}
+      </div>
+    </div>
+    <button class="cta red" id="ssMore"><span class="ic-in">${GH_ICON.barcode}</span>Scan the next one</button>
+    <button class="cta ghost" id="ssEdit">Change the amount</button>
+    <button class="cta ghost" id="ssDone">Done</button>`);
+  document.getElementById('ssMore').onclick=()=>openBarcodeScanner({shop:true});
+  document.getElementById('ssEdit').onclick=()=>{
+    /* Back the auto-added line out first, or the amount sheet adds a second
+       helping on top of the one we just put in. */
+    SHOP_CUSTOM=SHOP_CUSTOM.filter(x=>x.productId!==p.id);
+    saveShopCustom(); renderShop(); openProductShopAmount(p);
+  };
+  document.getElementById('ssDone').onclick=closeSheet;
+}
+
 function openProductToShopPicker(){
   const render=()=>{
     const q=shopPickQuery.toLowerCase().trim();
@@ -5783,11 +7222,14 @@ function renderProfileSettings(){
     </div>
     <div class="field"><label>Goal</label><select id="pGoal"><option value="bulk" ${PROFILE.goal==='bulk'?'selected':''}>Bulk (muscle gain, +300 kcal)</option><option value="maintain" ${PROFILE.goal==='maintain'?'selected':''}>Maintain</option><option value="cut" ${PROFILE.goal==='cut'?'selected':''}>Cut (fat loss, −350 kcal)</option></select></div>
     <p style="font-size:11.5px;color:var(--txt-3);margin-top:10px;line-height:1.55">Baseline assumes light daily activity (desk life + incidental movement). Your specific training calories are added separately based on that day's workout type, so they aren't double-counted.</p>
-    <div class="field" style="margin-top:14px"><label>Appearance</label><div id="themeSeg" style="display:flex;gap:8px;margin-top:6px">
-      <button type="button" data-theme-opt="dark" class="cta ghost" style="margin-top:0;flex:1">🌙 Dark</button>
-      <button type="button" data-theme-opt="light" class="cta ghost" style="margin-top:0;flex:1">☀️ Light</button>
-      <button type="button" data-theme-opt="gray" class="cta ghost" style="margin-top:0;flex:1">◐ Grayscale</button>
-    </div></div>
+    <!-- Theme lived here as three buttons wedged between your goal and a
+         paragraph about calorie baselines. It now has a surface of its own —
+         alongside typeface, accent and presets — and this is the door to it,
+         rather than a second copy of the controls that could disagree. -->
+    <div class="field" style="margin-top:14px"><label>Appearance</label>
+      <button type="button" class="cta ghost" id="openStyle" style="margin-top:6px">
+        ${({dark:'🌙 Dark',light:'☀️ Light',gray:'◐ Grayscale'})[activeStyle().theme]||'🌙 Dark'} · theme, typeface &amp; colour
+      </button></div>
     <div class="totalsbar" id="profPreview"></div>
     <button class="cta red" id="saveProfile">Save profile</button>
     <button class="cta ghost" id="openSync">☁︎ Cross-device sync${syncOn()?' · on':''}</button>
@@ -5805,12 +7247,12 @@ function renderProfileSettings(){
   }
   ['pWeight','pHeight','pAge','pSex','pGoal'].forEach(id=>document.getElementById(id).addEventListener('input',updatePreview));
   updatePreview();
-  let pendTheme=THEMES.includes(PROFILE.theme)?PROFILE.theme:'dark';
-  function paintThemeSeg(){ document.querySelectorAll('#themeSeg [data-theme-opt]').forEach(b=>{ const on=b.dataset.themeOpt===pendTheme; b.style.background=on?'var(--red-soft)':'var(--fill-3)'; b.style.borderColor=on?'var(--red)':'var(--stroke)'; b.style.color=on?'var(--txt)':'var(--txt-2)'; }); }
-  document.querySelectorAll('#themeSeg [data-theme-opt]').forEach(b=>b.onclick=()=>{ pendTheme=b.dataset.themeOpt; PROFILE.theme=pendTheme; applyTheme(); paintThemeSeg(); });
-  paintThemeSeg();
+  document.getElementById('openStyle').onclick=()=>openDevUI('style');
   document.getElementById('saveProfile').onclick=async()=>{
-    PROFILE={...PROFILE,weight:+document.getElementById('pWeight').value||75,height:+document.getElementById('pHeight').value||178,age:+document.getElementById('pAge').value||25,sex:document.getElementById('pSex').value,activity:'light',goal:document.getElementById('pGoal').value,theme:pendTheme};
+    /* theme is deliberately NOT collected here any more — the Style tab owns it
+       and writes it through applyStyle(). Spreading a stale value back over the
+       top would silently undo a change made there moments earlier. */
+    PROFILE={...PROFILE,weight:+document.getElementById('pWeight').value||75,height:+document.getElementById('pHeight').value||178,age:+document.getElementById('pAge').value||25,sex:document.getElementById('pSex').value,activity:'light',goal:document.getElementById('pGoal').value};
     await saveProfile();applyTheme();renderAll();toast('Profile saved');
   };
 }
@@ -5896,14 +7338,98 @@ function restoreToBatches(recipeId,servings){
 
 
 // expiration status for a YYYY-MM-DD string
-function expStatus(dstr){
+/* How many days ahead counts as "going off soon". Lives on PROFILE so it rides
+   the existing meal_profile key — synced and exported for free, no new store key
+   and no migration. Three days is the default because that is roughly when you
+   can still plan a meal around something. */
+const EXPIRY_DAYS_DEFAULT=3;
+function expiryWindow(){
+  const n=+PROFILE.expiryDays;
+  return isFinite(n)&&n>=0&&n<=30 ? Math.round(n) : EXPIRY_DAYS_DEFAULT;
+}
+/* Days from today until this date. Negative means it has already gone. Both
+   sides are floored to local midnight so "tomorrow" is a calendar question, not
+   a question about the time of day you happen to be asking. */
+function expDaysLeft(dstr){
   if(!dstr) return null;
   const d=new Date(dstr+'T00:00:00'); if(isNaN(d)) return null;
   const today=new Date(); today.setHours(0,0,0,0);
-  const days=Math.round((d-today)/86400000);
-  if(days<0) return {cls:'exp-past',label:'expired'};
-  if(days<=2) return {cls:'exp-soon',label:days===0?'today':days+'d left'};
-  return {cls:'exp-ok',label:d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})};
+  return Math.round((d-today)/86400000);
+}
+function expStatus(dstr){
+  const days=expDaysLeft(dstr);
+  if(days==null) return null;
+  const d=new Date(dstr+'T00:00:00');
+  if(days<0) return {cls:'exp-past',label:'expired',days};
+  if(days<=expiryWindow()) return {cls:'exp-soon',label:days===0?'today':days+'d left',days};
+  return {cls:'exp-ok',label:d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}),days};
+}
+
+/* Everything currently past its date or inside the warning window, newest
+   deadline first. Read on every fridge render — which is what "on app open"
+   amounts to here, since the tab renders on boot and on every return to it.
+   Deliberately no notification, no permission prompt, no service worker: this
+   is a banner on one tab and nothing else. */
+function fridgeExpiring(){
+  const win=expiryWindow(), out={expired:[],soon:[]};
+  FRIDGE.forEach(f=>{
+    const d=expDaysLeft(f.expires);
+    if(d==null) return;
+    if(d<0) out.expired.push({f,d});
+    else if(d<=win) out.soon.push({f,d});
+  });
+  out.expired.sort((a,b)=>a.d-b.d);
+  out.soon.sort((a,b)=>a.d-b.d);
+  return out;
+}
+
+function fridgeBannerHTML(){
+  const {expired,soon}=fridgeExpiring();
+  if(!expired.length&&!soon.length) return '';
+  const nameList=arr=>arr.slice(0,3).map(x=>esc(x.f.name)).join(', ')+
+    (arr.length>3?` and ${arr.length-3} more`:'');
+  const rows=[];
+  if(expired.length) rows.push(`<div class="fx-row fx-past">
+    <span class="fx-n">${expired.length}</span>
+    <span class="fx-t"><b>Past its date</b><i>${nameList(expired)}</i></span></div>`);
+  if(soon.length) rows.push(`<div class="fx-row fx-soon">
+    <span class="fx-n">${soon.length}</span>
+    <span class="fx-t"><b>Use within ${expiryWindow()} day${expiryWindow()===1?'':'s'}</b><i>${nameList(soon)}</i></span></div>`);
+  return `<div class="fx-banner">${rows.join('')}
+    <button class="fx-set" id="fxSet">Warn me ${expiryWindow()} day${expiryWindow()===1?'':'s'} ahead — change</button>
+  </div>`;
+}
+
+function openExpirySetting(){
+  const cur=expiryWindow();
+  openSheet(`<h3>Expiry warnings</h3>
+    <div class="meta">How far ahead the Fridge tab should flag things. This is a banner on that tab only — Aerte never sends a notification.</div>
+    <div class="field" style="margin-top:14px"><label>Warn me this many days ahead</label>
+      <select id="fxDays">${[0,1,2,3,5,7,14].map(n=>
+        `<option value="${n}" ${n===cur?'selected':''}>${n===0?'Only once it has expired':n+' day'+(n===1?'':'s')+' ahead'}</option>`).join('')}</select></div>
+    <button class="cta red" id="fxSave">Save</button>
+    <button class="cta ghost" id="fxCancel">Cancel</button>`);
+  document.getElementById('fxSave').onclick=async()=>{
+    PROFILE.expiryDays=+document.getElementById('fxDays').value;
+    await saveProfile(); closeSheet(); renderFridge(); renderFoodTabBadge();
+    toast('Expiry warnings updated');
+  };
+  document.getElementById('fxCancel').onclick=closeSheet;
+}
+
+/* A count on the Fridge sub-tab, so the banner is discoverable from the other
+   Food panes without nagging from anywhere else in the app. */
+function renderFoodTabBadge(){
+  const btn=document.querySelector('[data-food="fridge"]');
+  if(!btn) return;
+  const {expired,soon}=fridgeExpiring();
+  const n=expired.length+soon.length;
+  let dot=btn.querySelector('.fx-dot');
+  if(!n){ if(dot) dot.remove(); btn.classList.remove('has-fx'); return; }
+  if(!dot){ dot=document.createElement('span'); dot.className='fx-dot'; btn.appendChild(dot); }
+  dot.textContent=n>9?'9+':String(n);
+  dot.classList.toggle('past',expired.length>0);
+  btn.classList.add('has-fx');
 }
 
 // Can this recipe be made from fridge stock? Optional ingredients don't block. Returns {can, missing:[...], optMissing:[...]}
@@ -5933,12 +7459,14 @@ function renderFridge(){
   const countEl=document.getElementById('fridgeCount');
   if(!listBox) return;
   countEl.textContent = FRIDGE.length ? `${FRIDGE.length} item${FRIDGE.length!==1?'s':''}` : '';
+  renderFoodTabBadge();
 
   const items=[...FRIDGE].sort((a,b)=>{
     const ea=a.expires?new Date(a.expires):null, eb=b.expires?new Date(b.expires):null;
     if(ea&&eb) return ea-eb; if(ea) return -1; if(eb) return 1;
     return (a.name||'').localeCompare(b.name||'');
   });
+  const banner=fridgeBannerHTML();
   if(!items.length){
     listBox.innerHTML=`<div class="empty">Fridge is empty. Check items off your Shopping list, or add a product manually.</div>`;
   } else {
@@ -5973,7 +7501,11 @@ function renderFridge(){
         </div>`;
       }).join('');
     }
-    listBox.innerHTML=out;
+    /* Banner first, before the list it is about. The items are already sorted
+       by expiry, so the things it names are the ones directly underneath it. */
+    listBox.innerHTML=banner+out;
+    const fxs=document.getElementById('fxSet');
+    if(fxs) fxs.onclick=openExpirySetting;
     listBox.querySelectorAll('[data-fid]').forEach(el=>el.addEventListener('click',ev=>{if(ev.target.closest('.fi-x'))return;const f=FRIDGE.find(x=>x.id===el.dataset.fid);if(f&&f.type==='batch')return;openFridgeItem(el.dataset.fid);}));
     listBox.querySelectorAll('[data-fx]').forEach(b=>b.addEventListener('click',ev=>{ev.stopPropagation();FRIDGE=FRIDGE.filter(f=>f.id!==b.dataset.fx);saveFridge();renderFridge();}));
   }
@@ -7148,12 +8680,103 @@ const STREAK_TIERS=[
 let BADGE_OVERRIDES={};
 function loadBadges(){ const r=gget('aerte5_badges'); BADGE_OVERRIDES=r?JSON.parse(r.value):{}; }
 function saveBadges(){ gset('aerte5_badges',JSON.stringify(BADGE_OVERRIDES)); }
+/* ---- badge geometry ----
+   Regular polygon vertices, then the same polygon with its corners bent. A
+   pentagon with knife edges reads as a shape; a pentagon with 10px bends reads
+   as something struck in metal, and that difference is most of what separated
+   these from looking earned. Generated rather than hand-authored so pentagon and
+   hexagon both get it and stay in the same family. */
+function polyPts(n,R,cx,cy,rot){
+  return Array.from({length:n},(_,i)=>{
+    const a=(rot==null?-90:rot)*Math.PI/180 + i*2*Math.PI/n;
+    return [cx+R*Math.cos(a), cy+R*Math.sin(a)];
+  });
+}
+function roundPoly(pts,r){
+  const n=pts.length; let d='';
+  for(let i=0;i<n;i++){
+    const p=pts[i], a=pts[(i-1+n)%n], b=pts[(i+1)%n];
+    const va=[a[0]-p[0],a[1]-p[1]], vb=[b[0]-p[0],b[1]-p[1]];
+    const la=Math.hypot(va[0],va[1]), lb=Math.hypot(vb[0],vb[1]);
+    /* Never bend past the midpoint of either edge or adjacent corners eat each
+       other and the outline folds inside out. */
+    const ra=Math.min(r,la/2,lb/2);
+    const s=[p[0]+va[0]/la*ra, p[1]+va[1]/la*ra];
+    const e=[p[0]+vb[0]/lb*ra, p[1]+vb[1]/lb*ra];
+    d+=(i?'L':'M')+s[0].toFixed(2)+' '+s[1].toFixed(2)+
+       'Q'+p[0].toFixed(2)+' '+p[1].toFixed(2)+' '+e[0].toFixed(2)+' '+e[1].toFixed(2);
+  }
+  return d+'Z';
+}
 const BADGE_SHAPES={
-  pentagon:'M60 8 108 43 90 100 30 100 12 43Z',
+  pentagon:roundPoly(polyPts(5,49,60,57),10),
   shield:  'M60 6 C60 6 100 14 100 14 100 14 100 52 100 52 100 80 60 102 60 102 60 102 20 80 20 52 20 52 20 14 20 14 20 14 60 6 60 6Z',
-  hexagon: 'M60 6 104 32 104 82 60 108 16 82 16 32Z',
+  hexagon: roundPoly(polyPts(6,48,60,55),10),
   circle:  'M60 6 A48 48 0 1 1 59.9 6Z',
 };
+
+/* ---- the mark ----
+   This is the progression you actually read at a glance: nothing, then an ember,
+   then a small flame, then a full one — after which the PLATE starts earning
+   furniture instead, an inner rim and then rays. Before this, colour alone was
+   carrying it, which is why tiers 2 through 5 were four near-identical orange
+   pentagons that no amount of gradient could tell apart at 44px in the editor.
+
+   The tier names were already a fire ladder (Ember → Kindled → Blazing → White
+   Hot); the artwork just wasn't climbing it. */
+/* A pointed tip on a symmetric bulb is a TEARDROP, and no amount of tuning the
+   tip fixes that — two passes were lost proving it. What separates fire from
+   water is the concave lick: the outline dives back INTO the shape on one side
+   (the `C49 47 48 52.5 51.5 55` segment below) and climbs out again, so the
+   silhouette carries a notch instead of one unbroken convex sweep. The slight
+   lean off-axis at the tip does the rest. Symmetry is the enemy here. */
+const BADGE_FLAME     ='M61 23C61 23 63.5 31.5 68 38.5 72.5 45.5 76.5 51.5 76.5 59.5 76.5 69 69 76.5 60 76.5 51 76.5 43.5 69 43.5 59.5 43.5 54 46 49.5 49 47 49 47 48 52.5 51.5 55 51.5 55 51 46.5 55.5 39.5 59 34.5 61 28.5 61 23Z';
+/* The hot centre: the same shape again, smaller and sat low, where a real flame
+   is brightest. As a circle it read as a bubble trapped inside the droplet. */
+const BADGE_FLAME_CORE='M60.5 47C60.5 47 62 52 64.5 56 67 60 68 62.2 68 64.6 68 68.7 64.6 72 60.4 72 56.2 72 52.8 68.7 52.8 64.6 52.8 62 54.2 59.6 55.8 57.6 55.8 57.6 55.6 60.6 57.2 62 57.2 62 56.6 56 58.6 52.6 60 50.2 60.5 48.6 60.5 47Z';
+
+/* Eight short spokes in the field between flame and rim. Rays survive being
+   shrunk in a way that fine ornament (a laurel, an engraved numeral) does not —
+   at 44px those turn to mush, while a spoke is still a spoke. Offset by half a
+   step so none of them collides with the pentagon's top vertex. */
+const BADGE_RAYS=(()=>{
+  let d='';
+  for(let i=0;i<8;i++){
+    const a=(-90+22.5+i*45)*Math.PI/180;
+    d+='M'+(60+27*Math.cos(a)).toFixed(1)+' '+(55+27*Math.sin(a)).toFixed(1)+
+       'L'+(60+35*Math.cos(a)).toFixed(1)+' '+(55+35*Math.sin(a)).toFixed(1);
+  }
+  return d;
+})();
+
+/* Marks are debossed, not drawn: a light copy offset a hair DOWN sits under a
+   dark copy, which is how a stamped impression catches light. Pure black and
+   white at low opacity rather than named colours, so it holds over a silver
+   plate, a gold one, and whatever a user picks in the badge editor. */
+function badgeMark(i){
+  const emboss=(inner,sw)=>
+    `<g fill="none" stroke="#fff" stroke-opacity=".4" stroke-width="${sw}" stroke-linejoin="round" stroke-linecap="round" transform="translate(0 1.3)">${inner}</g>`+
+    `<g fill="none" stroke="#000" stroke-opacity=".45" stroke-width="${sw}" stroke-linejoin="round" stroke-linecap="round">${inner}</g>`;
+  const solid=(inner)=>
+    `<g fill="#fff" fill-opacity=".42" transform="translate(0 1.3)">${inner}</g>`+
+    `<g fill="#000" fill-opacity=".5">${inner}</g>`;
+  /* Scale about the flame's own base, not its centre — a small flame sits DOWN
+     in the hearth, it does not float in the middle of the plate. */
+  const atBase=(s,inner)=>`<g transform="translate(60 76.4) scale(${s}) translate(-60 -76.4)">${inner}</g>`;
+  const FLAME=`<path d="${BADGE_FLAME}"/>`;
+
+  /* Tier 0 shows the flame you have not lit yet, as an outline. A ring or an
+     empty plate says "nothing here"; the ghost says "this is the thing", which
+     is the more useful message on the one badge everybody starts holding. */
+  if(i<=0) return emboss(FLAME,3);
+  /* Just lit: an ember down in the base, with the ghost still around it. */
+  if(i===1) return emboss(FLAME,2)+solid('<circle cx="60" cy="64" r="8"/>');
+  /* Kindled — a real flame, but two thirds the height and no hot core yet. */
+  if(i===2) return atBase(.62,solid(FLAME));
+  let out=solid(FLAME)+`<path d="${BADGE_FLAME_CORE}" fill="#fff" fill-opacity=".26"/>`;
+  if(i>=5) out=`<path d="${BADGE_RAYS}" fill="none" stroke="#000" stroke-opacity=".28" stroke-width="3" stroke-linecap="round"/>`+out;
+  return out;
+}
 
 function badgeSVG(tier,tierIndex){
   const g='sg'+Math.random().toString(36).slice(2,7);
@@ -7186,16 +8809,151 @@ function badgeSVG(tier,tierIndex){
   }
   const glossDef=`<linearGradient id="gl_${g}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="${tier.mat==='matte'?'0.18':'0.5'}"/><stop offset=".5" stop-color="#fff" stop-opacity="0.06"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>`;
   const strokeW = (tier.mat==='facet'||tier.mat==='prism')?2:1.6;
+  /* From tier 4 the plate itself gains furniture: an inset rim, struck from the
+     same outline scaled about the badge's own centre so it follows whatever
+     shape is selected instead of being a circle drawn inside a pentagon. */
+  const rim = tierIndex>=4
+    ? `<path d="${P}" fill="none" stroke="#000" stroke-opacity=".22" stroke-width="1.6"
+         transform="translate(60 55) scale(.845) translate(-60 -55)"/>`
+    : '';
   return `<svg class="skx-badge" viewBox="0 0 120 108" style="filter:drop-shadow(0 6px 22px ${tier.glow}aa)">
     <defs>${fill}${glossDef}</defs>
     <path d="${P}" fill="url(#${g})"/>
     ${extra}
     ${gloss}
+    ${rim}
+    ${badgeMark(tierIndex==null?3:tierIndex)}
     <path d="${P}" fill="none" stroke="#ffffff${tier.mat==='matte'?'40':'66'}" stroke-width="${strokeW}"/>
   </svg>`;
 }
 function tierFor(days){ let t=STREAK_TIERS[0]; for(const x of STREAK_TIERS) if(days>=x.min) t=x; return t; }
 function nextTier(days){ return STREAK_TIERS.find(x=>x.min>days)||null; }
+
+/* ============ MILESTONES — the one-time celebration ============
+   Purely in-app: a DOM overlay and CSS. No Notification API, no permission
+   prompt, no service worker — a milestone is only ever shown to someone who is
+   already looking at the app, which is the only moment it means anything.
+
+   AWARDS records what has already been celebrated so it happens exactly once.
+   The `seeded` flag is the part that matters: without it, the first launch after
+   this shipped would fire seven tier pops and sixteen achievement pops back to
+   back at anyone with an existing streak. So the first run banks everything
+   currently earned SILENTLY, and only things earned after that are celebrated. */
+const AWARD_KEY='aerte5_awards';
+let AWARDS={tiers:[],achs:[],seeded:false};
+function loadAwards(){
+  try{ const r=gget(AWARD_KEY); AWARDS=r?JSON.parse(r.value):{tiers:[],achs:[],seeded:false}; }
+  catch(e){ AWARDS={tiers:[],achs:[],seeded:false}; }
+  AWARDS.tiers=Array.isArray(AWARDS.tiers)?AWARDS.tiers:[];
+  AWARDS.achs =Array.isArray(AWARDS.achs) ?AWARDS.achs :[];
+}
+function saveAwards(){ gset(AWARD_KEY,JSON.stringify(AWARDS)); }
+
+/* Everything earned right now, as {tiers:[index], achs:[id]}. */
+function awardsEarned(){
+  const w=computeWorkoutStats(), m=computeMealStats();
+  const cur=computeUnifiedStreak().cur;
+  const top=STREAK_TIERS.indexOf(tierFor(cur));
+  return {
+    /* Every tier up to the current one, not just the current one: a jump from
+       tier 1 to tier 3 has genuinely passed through 2, and a device that syncs
+       in late must not think it skipped one. */
+    tiers:STREAK_TIERS.map((_,i)=>i).filter(i=>i<=top),
+    achs:ACHIEVEMENTS.filter(a=>{ try{ return a.earned(w,m); }catch(e){ return false; } }).map(a=>a.id),
+  };
+}
+
+let _awardTimer=null;
+function awardsCheck(){
+  /* Debounced: savePlan() fires on every keystroke in the day-notes field, and
+     awardsEarned() walks 1200 days of history. */
+  clearTimeout(_awardTimer);
+  _awardTimer=setTimeout(awardsCheckNow,600);
+}
+function awardsCheckNow(){
+  if(typeof ACHIEVEMENTS==='undefined') return;
+  const now=awardsEarned();
+  if(!AWARDS.seeded){
+    AWARDS={tiers:now.tiers,achs:now.achs,seeded:true};
+    saveAwards();
+    return;                                    // silent catch-up, never a pop
+  }
+  const newTiers=now.tiers.filter(i=>!AWARDS.tiers.includes(i));
+  const newAchs =now.achs .filter(id=>!AWARDS.achs.includes(id));
+  if(!newTiers.length&&!newAchs.length) return;
+  AWARDS.tiers=now.tiers; AWARDS.achs=now.achs;
+  saveAwards();
+  /* Banked BEFORE anything is shown. If the celebration is interrupted — the
+     app is backgrounded, the tab is closed mid-animation — the milestone still
+     counts as celebrated rather than ambushing them again next launch. */
+  const queue=[
+    ...newTiers.map(i=>({kind:'tier',i})),
+    ...newAchs.map(id=>({kind:'ach',id})),
+  ];
+  awardShow(queue);
+}
+
+/* One at a time, in order, each waiting for the last to be dismissed. */
+let _awardQueue=[];
+function awardShow(items){
+  _awardQueue=_awardQueue.concat(items||[]);
+  if(!document.getElementById('awdWrap')) awardNext();
+}
+function awardNext(){
+  const el=document.getElementById('awdWrap');
+  if(el) el.remove();
+  const item=_awardQueue.shift();
+  if(!item) return;
+
+  let art,kick,name,msg;
+  if(item.kind==='tier'){
+    const t=STREAK_TIERS[item.i];
+    if(!t) return awardNext();
+    art=badgeSVG(t,item.i); kick=item.i===0?'Streak started':'New tier reached';
+    name=t.name; msg=t.msg;
+  }else{
+    const a=ACHIEVEMENTS.find(x=>x.id===item.id);
+    if(!a) return awardNext();
+    art=`<div class="awd-emoji">${a.icon}</div>`;
+    kick='Achievement unlocked'; name=a.name; msg=a.desc;
+  }
+
+  const wrap=document.createElement('div');
+  wrap.id='awdWrap'; wrap.className='awd-wrap';
+  wrap.setAttribute('role','dialog');
+  wrap.setAttribute('aria-live','polite');
+  wrap.setAttribute('aria-label',kick+': '+name);
+  wrap.innerHTML=`<div class="awd-card">
+      <div class="awd-stage">
+        <span class="awd-burst"></span><span class="awd-burst b2"></span>
+        <span class="awd-art">${art}</span>
+      </div>
+      <div class="awd-kick">${esc(kick)}</div>
+      <div class="awd-name">${esc(name)}</div>
+      <div class="awd-msg">${esc(msg||'')}</div>
+      <button class="cta red awd-go">${_awardQueue.length?'Next':'Nice'}</button>
+    </div>`;
+  document.body.appendChild(wrap);
+  wrap.querySelector('.awd-go').onclick=awardDismiss;
+  /* Tap the backdrop to dismiss, but never a tap that landed on the card. */
+  wrap.onclick=e=>{ if(e.target===wrap) awardDismiss(); };
+  const esc2=e=>{ if(e.key==='Escape'){ awardDismiss(); } };
+  wrap._esc=esc2; document.addEventListener('keydown',esc2);
+  requestAnimationFrame(()=>wrap.classList.add('in'));
+}
+function awardDismiss(){
+  const wrap=document.getElementById('awdWrap');
+  if(!wrap) return;
+  if(wrap._esc) document.removeEventListener('keydown',wrap._esc);
+  wrap.classList.remove('in'); wrap.classList.add('out');
+  const go=()=>{ wrap.remove(); awardNext(); };
+  /* transitionend can be missed if the element is hidden mid-flight, so the
+     timeout is the authority and the event only ever arrives early. */
+  let done=false;
+  const fin=()=>{ if(done) return; done=true; go(); };
+  wrap.addEventListener('transitionend',fin,{once:true});
+  setTimeout(fin,280);
+}
 
 /* the streak that requires BOTH training done AND meals logged on the same day */
 function computeUnifiedStreak(){
@@ -8142,9 +9900,10 @@ function openExerciseMediaEditor(id){
 
 /* ============ DEV SIMULATE — time travel, seed, tier editor ============ */
 function openDevUI(view,sub){
-  view=view||'symbols';
-  openSheet(`<h3>UI · Design</h3><div class="meta">Customise every visual: icons, muscle art, exercise media, and the streak badge.</div>
+  view=view||'style';
+  openSheet(`<h3>UI · Design</h3><div class="meta">Customise every visual: the app's own style, icons, muscle art, exercise media, and the streak badge.</div>
     <div class="dev-tabs" style="margin-top:14px">
+      <button data-uiv="style" class="${view==='style'?'on':''}">Style</button>
       <button data-uiv="symbols" class="${view==='symbols'?'on':''}">Icons</button>
       <button data-uiv="muscles" class="${view==='muscles'?'on':''}">Muscles</button>
       <button data-uiv="media" class="${view==='media'?'on':''}">Media</button>
@@ -8152,13 +9911,106 @@ function openDevUI(view,sub){
     </div><div id="uiBody"></div>`);
   const paint=v=>{
     document.querySelectorAll('[data-uiv]').forEach(b=>b.classList.toggle('on',b.dataset.uiv===v));
-    if(v==='symbols') renderUISymbols();
+    if(v==='style') renderUIStyle();
+    else if(v==='symbols') renderUISymbols();
     else if(v==='muscles') renderStudioMuscles('uiBody',v===view?sub:'slots');
     else if(v==='media') renderStudioMedia('uiBody');
     else renderUIStreak();
   };
   document.querySelectorAll('[data-uiv]').forEach(b=>b.onclick=()=>paint(b.dataset.uiv));
   paint(view);
+}
+
+/* ---- DEV · UI · STYLE ----
+   Built with the Health tab's language rather than the dev sheet's: section
+   headers over card surfaces, segmented controls, and a live specimen. Every
+   change applies the moment it is tapped — this is a control panel for how the
+   app looks, and a Save button between you and the result would make choosing a
+   typeface a guessing game. Presets are the undo. */
+function renderUIStyle(){
+  const body=document.getElementById('uiBody'); if(!body) return;
+  const s=activeStyle();
+  const sec=(t,inner)=>`<div class="sty-sec"><h4>${esc(t)}</h4>${inner}</div>`;
+
+  const themes=[['dark','Dark','🌙'],['light','Light','☀️'],['gray','Grayscale','◐']];
+  const themeRow=`<div class="gh-seg">${themes.map(([v,l,ic])=>
+    `<button data-sty-theme="${v}" class="${s.theme===v?'on':''}">${ic} ${l}</button>`).join('')}</div>`;
+
+  const accentRow=`<div class="sty-swatches">${STYLE_ACCENTS.map(a=>
+    `<button class="sty-sw${s.accent===a.id?' on':''}" data-sty-accent="${a.id}"
+      style="--sw:${a.v}" title="${esc(a.n)}" aria-label="${esc(a.n)}"
+      aria-pressed="${s.accent===a.id?'true':'false'}"><i></i><span>${esc(a.n)}</span></button>`).join('')}
+    ${s.theme==='gray'?`<p class="sty-note">The grayscale theme drains every hue on purpose, so an accent won't show while it's on.</p>`:''}`;
+
+  const fontRow=`<div class="sty-fonts">${STYLE_FONTS.map(f=>
+    `<button class="sty-font${s.font===f.id?' on':''}" data-sty-font="${f.id}"
+      aria-pressed="${s.font===f.id?'true':'false'}">
+      <span class="sty-fsample" style="font-family:${f.v}">Aa</span>
+      <span class="sty-fmeta"><b style="font-family:${f.v}">${esc(f.n)}</b><i>${esc(f.d)}</i></span>
+    </button>`).join('')}</div>`;
+
+  const presetRow=`<div class="sty-presets">${STYLE.presets.map(p=>{
+    const a=STYLE_ACCENTS.find(x=>x.id===p.accent)||STYLE_ACCENTS[0];
+    const f=STYLE_FONTS.find(x=>x.id===p.font)||STYLE_FONTS[0];
+    return `<div class="sty-pre${p.id===STYLE.active?' on':''}" data-sty-use="${p.id}">
+      <span class="sty-pdot" style="background:${a.v}"></span>
+      <span class="sty-pinfo"><b style="font-family:${f.v}">${esc(p.name)}</b>
+        <i>${esc(cap(p.theme))} · ${esc(f.n)} · ${esc(a.n)}</i></span>
+      ${p.locked?`<span class="sty-plock" title="The look Aerte shipped with">original</span>`
+                :`<button class="sty-pdel" data-sty-del="${p.id}" aria-label="Delete preset">×</button>`}
+    </div>`;
+  }).join('')}
+    <button class="addmini" id="styNew">+ Save the current look as a preset</button>`;
+
+  body.innerHTML=
+    `<div class="sty-preview" id="styPreview">
+       <div class="sty-pv-title">Aerte</div>
+       <div class="sty-pv-row"><span class="sty-pv-num">2,846</span><span class="sty-pv-lab">kcal today</span></div>
+       <div class="sty-pv-btns"><button class="sty-pv-cta">Primary action</button>
+         <button class="sty-pv-ghost">Secondary</button></div>
+     </div>`+
+    sec('Theme',themeRow)+
+    sec('Accent',accentRow)+
+    sec('Typeface',fontRow)+
+    sec('Presets',presetRow);
+
+  /* Edits write onto the ACTIVE preset. Tweaking a look and having it silently
+     revert on the next visit would be worse than no presets at all — except for
+     "Original", which is the recoverable baseline and so forks into a new preset
+     the moment you change anything on it. */
+  const mutate=(patch)=>{
+    let cur=STYLE.presets.find(p=>p.id===STYLE.active);
+    if(!cur){ cur={id:'p'+Date.now(),name:'Custom',...STYLE_DEFAULT}; STYLE.presets.push(cur); STYLE.active=cur.id; }
+    if(cur.locked){
+      const fork={...cur,id:'p'+Date.now(),name:'Custom',locked:false};
+      STYLE.presets.push(fork); STYLE.active=fork.id; cur=fork;
+    }
+    Object.assign(cur,patch);
+    saveStyle(); applyStyle(); saveProfile(); renderUIStyle();
+  };
+
+  body.querySelectorAll('[data-sty-theme]').forEach(b=>b.onclick=()=>mutate({theme:b.dataset.styTheme}));
+  body.querySelectorAll('[data-sty-accent]').forEach(b=>b.onclick=()=>mutate({accent:b.dataset.styAccent}));
+  body.querySelectorAll('[data-sty-font]').forEach(b=>b.onclick=()=>mutate({font:b.dataset.styFont}));
+  body.querySelectorAll('[data-sty-use]').forEach(el=>el.onclick=ev=>{
+    if(ev.target.closest('[data-sty-del]')) return;
+    STYLE.active=el.dataset.styUse; saveStyle(); applyStyle(); saveProfile(); renderUIStyle();
+  });
+  body.querySelectorAll('[data-sty-del]').forEach(b=>b.onclick=ev=>{
+    ev.stopPropagation();
+    const id=b.dataset.styDel;
+    STYLE.presets=STYLE.presets.filter(p=>p.id!==id);
+    if(STYLE.active===id) STYLE.active=STYLE.presets[0].id;
+    saveStyle(); applyStyle(); renderUIStyle();
+  });
+  document.getElementById('styNew').onclick=()=>{
+    const cur=activeStyle();
+    const name=(prompt('Name this preset','Custom '+(STYLE.presets.length))||'').trim();
+    if(!name) return;
+    STYLE.presets.push({id:'p'+Date.now(),name,theme:cur.theme,font:cur.font,accent:cur.accent});
+    STYLE.active=STYLE.presets[STYLE.presets.length-1].id;
+    saveStyle(); renderUIStyle(); toast('Preset saved');
+  };
 }
 
 /* ============ DEV · BOOKENDS — warmup & stretch configuration ============
@@ -9215,6 +11067,7 @@ document.getElementById('nextWeek').onclick=()=>{weekOffset++;selectedAbsDay=wee
 
 /* ============ BOOT ============ */
 function renderAll(){
+  paintStaticIcons();
   renderWeekLabel();renderSumCard();renderDaystrip();renderDayDetail();
   renderRecGrid();renderProdGrid();renderSuppGrid();renderFridge();
   renderTrainWeek();renderLib();renderBodyMap();
@@ -9250,6 +11103,17 @@ document.getElementById('seqClose').onclick=()=>closeSeq(true);
     ghFromURL().then(()=>ghAutoPull('boot')).catch(()=>{}); },0);
   loadSymbols();
   loadBadges();
+  /* After load() has restored PROFILE — the first-run preset is a snapshot of
+     the CURRENT look, and taking it before the profile exists would snapshot
+     the hardcoded defaults instead of what this device was actually showing. */
+  loadStyle(); applyStyle();
+  loadAwards();
+  /* Deferred past first paint. On a device that has never run this build the
+     call banks every milestone already earned without showing anything, and
+     that walk is 1200 days of history — not something to put in front of the
+     first frame. After the seed it is also how a milestone crossed on ANOTHER
+     device gets noticed here once the gist lands. */
+  setTimeout(awardsCheckNow,1200);
   // test/debug hook — lets a harness inspect internals without changing behaviour
   window.__aerte={get CYCLE_START(){return CYCLE_START;},get LIB(){return LIB;},
     get WPLAN(){return WPLAN;},get WDONE(){return WDONE;},get PLAN(){return PLAN;},
@@ -9268,11 +11132,18 @@ document.getElementById('seqClose').onclick=()=>closeSeq(true);
     DEV_LAYOUT:()=>DEV_LAYOUT,devOrder,MUSCLE_ART:()=>MUSCLE_ART,
     get MSVG(){return MSVG;},get FX(){return FX;},get CYCLE(){return CYCLE;},saveCycle,applyFX,get TYPE_PICK(){return TYPE_PICK;},rollExercises,typeOccurrence,coreFor,poolFor,exTypes,inType,memberOf,get MMAP(){return MMAP;},set MMAP(v){MMAP=v;},saveMmap,mmParse,mmExtract,mmCommit,mmAutoMatch,renderStudioMap,get RECIPES(){return RECIPES;},muscleSlot,badgeSVG,openMuscleEditor,tierFor,get MUSCLE_ART(){return MUSCLE_ART;},
     sym,loadSymbols,saveSymbols,openDevUI,openExercise,openDay,openDevTools,devResetStreak,loadBadges,saveBadges,badgeSVG,setDevMode,openBadgeEditor,stripDecorations,get BADGE_OVERRIDES(){return BADGE_OVERRIDES;},set BADGE_OVERRIDES(v){BADGE_OVERRIDES=v;},get WDONE(){return WDONE;},saveWDone,get PLAN(){return PLAN;},savePlan,todayKey,addDays,ensureDay,dayTotals,renderStreakCard,openProfileHub,computeUnifiedStreak,get SYM_OVERRIDES(){return SYM_OVERRIDES;},set SYM_OVERRIDES(v){SYM_OVERRIDES=v;},SYM_DEFAULTS:()=>SYM_DEFAULTS,renderProgressExtras,ACHIEVEMENTS:()=>ACHIEVEMENTS,
+    loadStyle,saveStyle,applyStyle,activeStyle,renderUIStyle,get STYLE(){return STYLE;},set STYLE(v){STYLE=v;},STYLE_FONTS:()=>STYLE_FONTS,STYLE_ACCENTS:()=>STYLE_ACCENTS,
+    fridgeExpiring,expiryWindow,expStatus,VITAMINS,shopAddScanned,
+    loadAwards,saveAwards,awardsCheckNow,awardsEarned,awardShow,awardNext,awardDismiss,get AWARDS(){return AWARDS;},set AWARDS(v){AWARDS=v;},badgeMark,
     ALL_STORE_KEYS:()=>ALL_STORE_KEYS,gget,gset,gdel,getSchema,SCHEMA_VERSION,
     openSyncSettings,syncNow,syncPayload,syncApply,syncSig,syncTouch,loadSync,saveSyncState,saveSyncCfg,
     openGoogleHealth,ghPull,ghOn,ghKeyOf,ghRedirectUri,ghAutoPull,loadGH,
     renderHealth,readinessFor,sleepScore,healthBaseline,ghHeartRate,healthRecord,
     get HEALTH_DAY(){return HEALTH_DAY;},set HEALTH_DAY(v){HEALTH_DAY=v;},
+    get HEALTH_TREND(){return HEALTH_TREND;},set HEALTH_TREND(v){HEALTH_TREND=v;},
+    get HEALTH_CARDIO(){return HEALTH_CARDIO;},set HEALTH_CARDIO(v){HEALTH_CARDIO=v;},
+    cardioLoad,cardioRadialHTML,azmAvailable,sleepRestless,restlessTrace,dayNutri,pearson,
+    trendsCardHTML,cardioCardHTML,sleepCardHTML,hrCardHTML,paintHrCurve,nutriscoreHTML,
     get HEALTHLOG(){return HEALTHLOG;},set HEALTHLOG(v){HEALTHLOG=v;},saveHealthLog,
     get GH_CFG(){return GH_CFG;},set GH_CFG(v){GH_CFG=v;},
     get GH_ST(){return GH_ST;},get GH_STATUS(){return GH_STATUS;},
@@ -9335,7 +11206,7 @@ document.getElementById('seqClose').onclick=()=>closeSeq(true);
   header{transition:padding .32s var(--ease);}
   .brand h1{transition:font-size .32s var(--ease),letter-spacing .32s var(--ease);}
   .brand .kick{transition:opacity .32s var(--ease);}
-  header.m-scrolled{padding:10px 0 9px;}
+  header.m-scrolled{padding:calc(10px + env(safe-area-inset-top,0px)) 0 9px;}
   header.m-scrolled .brand h1{font-size:22px;}
   header.m-scrolled .brand .kick{opacity:.55;}
 
@@ -9546,7 +11417,13 @@ document.getElementById('seqClose').onclick=()=>closeSeq(true);
      mounted the chips must NOT draw their own red edge or you get two. */
   /* Sized to the chip exactly: border only, no spread ring — `0 0 0 1px` paints
      OUTSIDE the border box and made the outline a pixel proud on every edge. */
-  .dsel{position:absolute;left:0;top:0;pointer-events:none;z-index:0;border-radius:16px;
+  /* z-index 3 puts the traveller ABOVE the chips (which sit at 1). Underneath,
+     each chip's own opaque background clipped the glow to nothing and ate the
+     red edge along every shared border — the outline read as a dent rather than
+     a highlight. It is pointer-events:none, so drawing on top costs no
+     interaction; the chip's content still reads through because the traveller
+     paints only a 1px border and an outward shadow, never a fill. */
+  .dsel{position:absolute;left:0;top:0;pointer-events:none;z-index:3;border-radius:16px;
     border:1px solid var(--red);box-shadow:0 8px 22px var(--sel-glow);
     transition:transform .3s var(--ease),width .3s var(--ease),height .3s var(--ease);}
   html.dsel-on .daystrip .dchip{z-index:1;}
